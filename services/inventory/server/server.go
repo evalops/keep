@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -51,19 +53,35 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	s := &Server{cfg: cfg, db: db}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", s.health)
 	
-	// Apply authentication middleware to API endpoints if mTLS is configured
-	if cfg.ClientCA != "" {
-		mux.HandleFunc("/v1/devices", s.requireClientCert(s.handleDevices))
-		mux.HandleFunc("/v1/devices/", s.requireClientCert(s.handleDevice))
-	} else {
-		mux.HandleFunc("/v1/devices", s.handleDevices)
-		mux.HandleFunc("/v1/devices/", s.handleDevice)
-	}
+	// Create chi router with middleware
+	r := chi.NewRouter()
+	
+	// Add middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(30 * time.Second))
 
-	s.http = &http.Server{Addr: cfg.Addr, Handler: mux}
+	// Health endpoint (no auth required)
+	r.Get("/health", s.health)
+	
+	// API routes with optional mTLS authentication
+	r.Route("/v1", func(r chi.Router) {
+		if cfg.ClientCA != "" {
+			r.Use(s.requireClientCertMiddleware)
+		}
+		
+		r.Route("/devices", func(r chi.Router) {
+			r.Get("/", s.listDevices)
+			r.Post("/", s.registerDevice)
+			r.Get("/{deviceID}", s.getDevice)
+			r.Put("/{deviceID}", s.updateDevice)
+			r.Post("/{deviceID}/posture", s.updateDevicePosture)
+		})
+	})
+
+	s.http = &http.Server{Addr: cfg.Addr, Handler: r}
 	return s, nil
 }
 
@@ -137,8 +155,8 @@ func (s *Server) configureTLS() (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
-// requireClientCert is middleware that validates client certificates
-func (s *Server) requireClientCert(next http.HandlerFunc) http.HandlerFunc {
+// requireClientCertMiddleware is middleware that validates client certificates
+func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// If mTLS is not required, check if client cert is present and valid
 		if r.TLS == nil {
@@ -160,7 +178,7 @@ func (s *Server) requireClientCert(next http.HandlerFunc) http.HandlerFunc {
 				cert.Subject.CommonName, cert.Issuer.CommonName)
 		}
 
-		next(w, r)
+		next.ServeHTTP(w, r)
 	}
 }
 
@@ -169,31 +187,28 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		s.listDevices(w, r)
-	case http.MethodPost:
-		s.registerDevice(w, r)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/v1/devices/")
-	if id == "" {
+// updateDevicePosture handles posture update requests
+func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
+	deviceID := chi.URLParam(r, "deviceID")
+	if deviceID == "" {
 		http.Error(w, "device id required", http.StatusBadRequest)
 		return
 	}
-	switch r.Method {
-	case http.MethodGet:
-		s.getDevice(w, r, id)
-	case http.MethodPut:
-		s.updateDevice(w, r, id)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+
+	var payload struct {
+		Posture string `json:"posture"`
 	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	_, err := s.db.Exec(`UPDATE devices SET posture=$1, last_updated=now() WHERE id=$2`, payload.Posture, deviceID)
+	if err != nil {
+		http.Error(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
 }
 
 type Device struct {
@@ -256,7 +271,8 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-func (s *Server) getDevice(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "deviceID")
 	var d Device
 	if err := s.db.QueryRow(`SELECT id, public_key, posture, registered_at, last_updated FROM devices WHERE id=$1`, id).Scan(&d.ID, &d.PublicKey, &d.Posture, &d.Registered, &d.LastUpdated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -269,7 +285,8 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request, id string) {
 	json.NewEncoder(w).Encode(d)
 }
 
-func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request, id string) {
+func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "deviceID")
 	var payload struct {
 		Posture string `json:"posture"`
 	}
