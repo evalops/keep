@@ -3,7 +3,6 @@ package secrets
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +49,7 @@ func NewVaultManager(cfg Config) (*VaultManager, error) {
 func authenticateVault(client *api.Client, cfg Config) error {
 	// Try token file first
 	if tokenFile := cfg.Extra["VAULT_TOKEN_FILE"]; tokenFile != "" {
-		token, err := ioutil.ReadFile(tokenFile)
+		token, err := readSecretFile(tokenFile)
 		if err != nil {
 			return fmt.Errorf("failed to read token file %s: %w", tokenFile, err)
 		}
@@ -82,7 +81,7 @@ func authenticateVault(client *api.Client, cfg Config) error {
 
 // authenticateKubernetes performs Kubernetes-based authentication
 func authenticateKubernetes(client *api.Client, tokenFile, role string) error {
-	jwt, err := ioutil.ReadFile(tokenFile)
+	jwt, err := readSecretFile(tokenFile)
 	if err != nil {
 		return fmt.Errorf("failed to read service account token: %w", err)
 	}
@@ -200,4 +199,30 @@ func (m *VaultManager) isKVv2() bool {
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
+}
+
+func readSecretFile(path string) ([]byte, error) {
+	sanitized, err := sanitizePath(path)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(sanitized)
+}
+
+func sanitizePath(path string) (string, error) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+
+	cleaned := filepath.Clean(trimmed)
+	if !filepath.IsAbs(cleaned) {
+		return "", fmt.Errorf("path must be absolute: %s", path)
+	}
+
+	if strings.Contains(cleaned, "..") {
+		return "", fmt.Errorf("path contains traversal: %s", path)
+	}
+
+	return cleaned, nil
 }
