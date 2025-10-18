@@ -6,7 +6,7 @@
 > It is **NOT intended for production use** and may contain security vulnerabilities, incomplete features, 
 > and other issues. Use at your own risk in development/testing environments only.
 
-This repository implements an end-to-end proof of concept for a device-aware zero-trust access proxy. A user authenticates with Google SSO, Envoy enriches requests with device posture from an attestation service, and Open Policy Agent (OPA) decides whether the request is allowed, denied, or requires step-up authentication before the request reaches a protected Flask application.
+This repository implements an end-to-end proof of concept for a device-aware zero-trust access proxy. A user authenticates with Google SSO, Envoy enriches requests with device posture from an attestation service, and Open Policy Agent (OPA) decides whether the request is allowed, denied, or requires step-up authentication before the request reaches a protected Flask application. The stack now includes production-inspired automation such as OpenTelemetry instrumentation, Kubernetes manifests with health probes/resource policies, and CI workflows that cache dependencies and execute smoke/security tests.
 
 ## Architecture Overview
 
@@ -30,8 +30,9 @@ Key components:
 - **Device Inventory Service (Go + Postgres)**: Stores registered device keys and current posture states. Provides REST APIs for attestation agents and the authz service.
 - **Device Attestor Agent (Go CLI)**: Runs on devices to register cryptographic identity and update posture.
 - **OPA**: Hosts policy bundles controlling allow/deny/step-up outcomes based on user, device, and context.
-- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access.
-- **Docker Compose**: Orchestrates the full stack (Postgres, Inventory, OPA, Authz, Envoy, Flask).
+- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access, now instrumented with OpenTelemetry traces/metrics.
+- **Docker Compose & Smoke Tests**: Orchestrates the full stack (Postgres, Inventory, OPA, Authz, Envoy, Flask). The `make smoke` command runs a reusable smoke script that brings the stack up, probes health endpoints, and tears it down.
+- **Kubernetes Manifests**: Baseline manifests under `deploy/kubernetes/` with readiness/liveness probes, resource budgets, and ConfigMap/Secret-driven configuration for the core services.
 
 ## Getting Started
 
@@ -73,6 +74,14 @@ Services exposed:
 - OPA: `http://localhost:8181`
 - Flask app: behind Envoy; direct access disabled
 
+Short health check of the Docker stack:
+
+```
+make smoke
+```
+
+This invokes `scripts/smoke-tests.sh`, which builds containers, waits for readiness, curls `/health` for each service, and performs cleanup.
+
 ### Device Registration Flow
 
 1. The device agent generates a key pair and CSR and posts it to the authz service to obtain a short-lived client certificate.
@@ -86,6 +95,8 @@ Services exposed:
 3. The authz service verifies the JWT signature against Google JWKS, fetches device posture from inventory, and evaluates the OPA policy (`policies/keep.rego`).
 4. Depending on the decision (`allow`, `deny`, or `step-up`), Envoy either forwards the request with a client mTLS certificate, returns an error, or triggers additional authentication.
 
+Go services and the Flask app emit OpenTelemetry spans and metrics over OTLP/HTTP. Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and optionally `OTEL_EXPORTER_OTLP_INSECURE=true`) to route telemetry to a collector such as the OpenTelemetry Collector.
+
 ## Development
 
 ### Go Services
@@ -95,6 +106,8 @@ Run unit tests:
 ```
 go test ./...
 ```
+
+The CI pipeline mirrors this step and caches Go modules to minimize repeated downloads.
 
 ### OPA Policies
 
@@ -111,6 +124,16 @@ The inventory service auto-migrates on startup. To inspect data during developme
 ```
 docker exec -it keep-postgres-1 psql -U postgres keep
 ```
+
+### Continuous Integration
+
+GitHub Actions workflows under `.github/workflows/` include:
+
+- **CI/CD Pipeline (`ci.yml`)** – cached linting, unit tests with Postgres, coverage uploads, OPA policy checks, container builds, and Docker Compose smoke validation.
+- **Security Checks (`security.yml`)** – scheduled/governed runs of gosec, govulncheck, and Trivy through shared scripts.
+- **Smoke Tests (`smoke-tests.yml`)** – on-demand workflow executing the same smoke script used locally (`scripts/smoke-tests.sh`).
+
+`actions/setup-go` and `actions/setup-python` are configured with caching to reduce build times, and reusable scripts ensure parity between local development and CI.
 
 ## Repository Structure
 
@@ -131,7 +154,8 @@ services/inventory       # Inventory service implementation
 - Implement real device attestation agent interactions.
 - Add Envoy WASM filter for richer posture context.
 - Expand OPA policies to include risk scoring and step-up flows.
-- Integrate telemetry (Prometheus/Grafana) for observability.
+- Deploy an OpenTelemetry Collector + Jaeger/Grafana stack to visualize traces and metrics across services.
+- Add integration tests that validate distributed tracing context propagation end-to-end.
 
 ## License
 
