@@ -45,10 +45,20 @@ func New(cfg Config) (*Server, error) {
 		return nil, errors.New("Google client ID is required")
 	}
 
-	ca, err := pki.LoadOrCreateCA("/data/certs/keep-root.pem", "/data/certs/keep-root-key.pem", "keep-root", 0)
-	if err != nil {
-		return nil, fmt.Errorf("load/create CA: %w", err)
+	// Load CA from externally provisioned certificates (never generate in service)
+	if cfg.RootCAPath == "" {
+		return nil, errors.New("root CA certificate path is required (must be provisioned externally)")
 	}
+	if cfg.TLSKeyPath == "" {
+		return nil, errors.New("root CA private key path is required (must be provisioned externally)")
+	}
+
+	ca, err := pki.LoadCA(cfg.RootCAPath, cfg.TLSKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load external CA from %s: %w", cfg.RootCAPath, err)
+	}
+
+	log.Printf("Loaded external CA certificate from %s", cfg.RootCAPath)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	

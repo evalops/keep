@@ -33,7 +33,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 	}
 
 	if _, err := os.Stat(certPath); err == nil {
-		return loadCA(certPath, keyPath)
+		return LoadCA(certPath, keyPath)
 	}
 
 	if validFor == 0 {
@@ -92,10 +92,11 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	return loadCA(certPath, keyPath)
+	return LoadCA(certPath, keyPath)
 }
 
-func loadCA(certPath, keyPath string) (*CertificateAuthority, error) {
+// LoadCA loads an existing CA from certificate and key files
+func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, err

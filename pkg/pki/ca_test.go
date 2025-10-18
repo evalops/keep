@@ -87,7 +87,7 @@ func TestLoadCA(t *testing.T) {
 		os.WriteFile(certPath, []byte("invalid pem"), 0644)
 		os.WriteFile(keyPath, []byte("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg\n-----END PRIVATE KEY-----"), 0600)
 
-		_, err := loadCA(certPath, keyPath)
+		_, err := LoadCA(certPath, keyPath)
 		if err == nil {
 			t.Error("Expected error with invalid certificate PEM")
 		}
@@ -110,7 +110,7 @@ func TestLoadCA(t *testing.T) {
 		// Now corrupt the key file
 		os.WriteFile(keyPath, []byte("invalid key pem"), 0600)
 
-		_, err = loadCA(certPath, keyPath)
+		_, err = LoadCA(certPath, keyPath)
 		if err == nil {
 			t.Error("Expected error with invalid key PEM")
 		}
@@ -133,7 +133,7 @@ func TestLoadCA(t *testing.T) {
 		// Remove key file
 		os.Remove(keyPath)
 
-		_, err = loadCA(certPath, keyPath)
+		_, err = LoadCA(certPath, keyPath)
 		if err == nil {
 			t.Error("Expected error when key file doesn't exist")
 		}
