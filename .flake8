@@ -1,0 +1,42 @@
+[flake8]
+max-line-length = 100
+extend-ignore = 
+    # E203: whitespace before ':' (conflicts with black)
+    E203,
+    # W503: line break before binary operator (conflicts with black)
+    W503,
+    # E501: line too long (handled by black)
+    E501
+exclude = 
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    .pytest_cache,
+    build,
+    dist,
+    *.egg-info
+
+per-file-ignores =
+    # Tests can have longer lines and more complexity
+    test_*.py: E501, C901
+    *_test.py: E501, C901
+    # Allow unused imports in __init__.py
+    __init__.py: F401
+
+max-complexity = 10
+doctests = True
+statistics = True
+count = True
+show-source = True
+
+# Additional checks
+select = 
+    # Pyflakes
+    F,
+    # pycodestyle errors
+    E,
+    # pycodestyle warnings  
+    W,
+    # McCabe complexity
+    C901

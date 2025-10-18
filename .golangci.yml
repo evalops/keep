@@ -1,0 +1,156 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  build-tags: []
+  skip-dirs:
+    - vendor
+  skip-files:
+    - ".*\\.pb\\.go$"
+    - ".*_generated\\.go$"
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  
+  gocyclo:
+    min-complexity: 15
+  
+  goimports:
+    local-prefixes: github.com/EvalOps/keep
+  
+  govet:
+    enable-all: true
+  
+  revive:
+    min-confidence: 0.8
+    rules:
+      - name: var-naming
+      - name: package-comments
+      - name: exported
+      - name: var-declaration
+      - name: blank-imports
+      - name: context-as-argument
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: flag-parameter
+      - name: unnecessary-stmt
+      - name: struct-tag
+      - name: atomic
+      - name: empty-block
+      - name: superfluous-else
+      - name: confusing-naming
+      - name: get-return
+      - name: modifies-parameter
+      - name: confusing-results
+      - name: deep-exit
+      - name: unused-receiver
+      - name: add-constant
+      - name: flag-parameter
+      - name: unnecessary-stmt
+      - name: defer
+  
+  gosec:
+    excludes:
+      - G101 # Hardcoded credentials - we handle this via secret management
+      - G104 # Unhandled errors - covered by errcheck
+      - G204 # Command injection - intentional for system commands
+  
+  staticcheck:
+    go: "1.22"
+    checks: ["all"]
+  
+  gci:
+    local-prefixes: github.com/EvalOps/keep
+  
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gofmt
+    - goimports
+    - revive
+    - gosec
+    - gocyclo
+    - goconst
+    - gci
+    - misspell
+    - prealloc
+    - unconvert
+    - unparam
+    - whitespace
+    - gofumpt
+    - godox
+    - bodyclose
+    - gocritic
+    - goprintffuncname
+    - nolintlint
+  
+  disable:
+    - deadcode
+    - structcheck
+    - varcheck
+    - golint
+    - maligned
+    - interfacer
+    - scopelint
+
+issues:
+  exclude-rules:
+    # Allow long lines in tests for readability
+    - path: "_test\\.go"
+      linters:
+        - lll
+    
+    # Allow deep nesting in tests
+    - path: "_test\\.go"
+      linters:
+        - gocyclo
+    
+    # Allow TODO comments in development
+    - linters:
+        - godox
+      text: "TODO"
+      
+    # Allow specific patterns
+    - text: "should have comment or be unexported"
+      linters:
+        - revive
+      path: "_test\\.go"
+    
+    # Allow unhandled errors in main functions (handled by log.Fatal)
+    - path: "cmd/.*main\\.go"
+      linters:
+        - errcheck
+      text: "Error return value of.*not checked"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+severity:
+  default-severity: error
+  case-sensitive: false
