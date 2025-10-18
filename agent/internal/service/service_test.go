@@ -79,7 +79,10 @@ func TestService_initialRegistration(t *testing.T) {
 				registrationRequests++
 
 				var req registerRequest
-				json.NewDecoder(r.Body).Decode(&req)
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					http.Error(w, "invalid payload", http.StatusBadRequest)
+					return
+				}
 
 				if req.ID != "test-device" {
 					t.Errorf("Expected device ID 'test-device', got %s", req.ID)
@@ -217,7 +220,10 @@ func TestService_updatePosture(t *testing.T) {
 				updateRequests++
 
 				var req updatePostureRequest
-				json.NewDecoder(r.Body).Decode(&req)
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					http.Error(w, "invalid payload", http.StatusBadRequest)
+					return
+				}
 
 				if req.ID != "test-device" {
 					t.Errorf("Expected device ID 'test-device', got %s", req.ID)
@@ -293,7 +299,10 @@ func TestService_obtainCertificate(t *testing.T) {
 				certRequests++
 
 				var req map[string]string
-				json.NewDecoder(r.Body).Decode(&req)
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					http.Error(w, "invalid payload", http.StatusBadRequest)
+					return
+				}
 
 				if req["device_id"] != "test-device" {
 					t.Errorf("Expected device ID 'test-device', got %s", req["device_id"])
@@ -345,13 +354,13 @@ func TestService_obtainCertificate(t *testing.T) {
 		}
 
 		// Verify certificate was written
-		if _, err := os.Stat(config.CertPath); os.IsNotExist(err) {
-			t.Error("Certificate file was not created")
+		if _, err := os.Stat(config.CertPath); err != nil {
+			t.Fatalf("Certificate file verification failed: %v", err)
 		}
 
 		// Verify CA was downloaded and written
-		if _, err := os.Stat(config.CAPath); os.IsNotExist(err) {
-			t.Error("CA file was not created")
+		if _, err := os.Stat(config.CAPath); err != nil {
+			t.Fatalf("CA file verification failed: %v", err)
 		}
 	})
 

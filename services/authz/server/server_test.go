@@ -444,9 +444,12 @@ func TestServer_lookupDevice(t *testing.T) {
 		}))
 		defer mockInventory.Close()
 
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
 
-		result := server.lookupDevice(context.Background(), "test-device")
+		result := server.lookupDevice(ctx, "test-device")
 
 		if result["id"] != expectedDevice["id"] || result["posture"] != expectedDevice["posture"] {
 			t.Errorf("Expected device info %v, got %v", expectedDevice, result)
@@ -469,9 +472,12 @@ func TestServer_lookupDevice(t *testing.T) {
 		}))
 		defer mockInventory.Close()
 
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
 
-		result := server.lookupDevice(context.Background(), "test-device")
+		result := server.lookupDevice(ctx, "test-device")
 
 		if result["posture"] != "unknown" {
 			t.Errorf("Expected posture 'unknown' for service error, got %v", result["posture"])

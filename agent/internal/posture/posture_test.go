@@ -268,7 +268,9 @@ func TestFileExists(t *testing.T) {
 
 	t.Run("returns true for existing file", func(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "exists.txt")
-		os.WriteFile(testFile, []byte("test"), 0644)
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			t.Fatalf("failed to write test file: %v", err)
+		}
 
 		if !fileExists(testFile) {
 			t.Error("Expected true for existing file")

@@ -145,7 +145,9 @@ func (s *Service) setupSignalHandling() {
 				s.logger.Printf("Received signal: %v", sig)
 				switch sig {
 				case syscall.SIGINT, syscall.SIGTERM:
-					s.Stop()
+					if err := s.Stop(); err != nil {
+						s.logger.Printf("Failed to stop service: %v", err)
+					}
 				case syscall.SIGHUP:
 					s.logger.Println("Received SIGHUP, reloading configuration...")
 					// Could implement config reload here
