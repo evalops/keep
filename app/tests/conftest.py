@@ -81,11 +81,15 @@ def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
         except Exception as exc:  # pragma: no cover - transient failures
             code = _sqlstate(exc)
             if isinstance(code, str) and code.startswith("28"):
-                raise RuntimeError(f"Database authentication failed (SQLSTATE {code}): {exc}") from exc
+                raise RuntimeError(
+                    f"Database authentication failed (SQLSTATE {code}): {exc}"
+                ) from exc
             if code and code not in TRANSIENT_CODES:
                 raise
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"Database not ready after {timeout}s (last error: {exc})") from exc
+                raise TimeoutError(
+                    f"Database not ready after {timeout}s (last error: {exc})"
+                ) from exc
             time.sleep(min(0.25 * attempt, 2.0))
 
 
