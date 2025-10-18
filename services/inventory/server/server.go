@@ -2,9 +2,13 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -14,12 +18,14 @@ import (
 )
 
 type Config struct {
-	Addr      string
-	DSN       string
-	TLSCert   string
-	TLSKey    string
-	AuthzJWKS string
-	Shutdown  time.Duration
+	Addr       string
+	DSN        string
+	TLSCert    string
+	TLSKey     string
+	ClientCA   string        // CA certificate for client authentication
+	AuthzJWKS  string
+	Shutdown   time.Duration
+	RequireMTLS bool         // Whether to require client certificates
 }
 
 type Server struct {
@@ -47,8 +53,15 @@ func NewServer(cfg Config) (*Server, error) {
 	s := &Server{cfg: cfg, db: db}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.health)
-	mux.HandleFunc("/v1/devices", s.handleDevices)
-	mux.HandleFunc("/v1/devices/", s.handleDevice)
+	
+	// Apply authentication middleware to API endpoints if mTLS is configured
+	if cfg.ClientCA != "" {
+		mux.HandleFunc("/v1/devices", s.requireClientCert(s.handleDevices))
+		mux.HandleFunc("/v1/devices/", s.requireClientCert(s.handleDevice))
+	} else {
+		mux.HandleFunc("/v1/devices", s.handleDevices)
+		mux.HandleFunc("/v1/devices/", s.handleDevice)
+	}
 
 	s.http = &http.Server{Addr: cfg.Addr, Handler: mux}
 	return s, nil
@@ -59,7 +72,27 @@ func (s *Server) Start(ctx context.Context) error {
 	defer cancel()
 
 	go func() {
-		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		var err error
+		if s.cfg.TLSCert != "" && s.cfg.TLSKey != "" {
+			// Configure TLS with optional mTLS
+			tlsConfig, configErr := s.configureTLS()
+			if configErr != nil {
+				log.Printf("TLS configuration failed: %v", configErr)
+				return
+			}
+			
+			s.http.TLSConfig = tlsConfig
+			log.Printf("Starting inventory service with TLS on %s", s.cfg.Addr)
+			if s.cfg.RequireMTLS {
+				log.Printf("mTLS client authentication required")
+			}
+			err = s.http.ListenAndServeTLS(s.cfg.TLSCert, s.cfg.TLSKey)
+		} else {
+			log.Printf("Starting inventory service without TLS on %s", s.cfg.Addr)
+			err = s.http.ListenAndServe()
+		}
+		
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("inventory listen error: %v", err)
 		}
 	}()
@@ -68,6 +101,67 @@ func (s *Server) Start(ctx context.Context) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), s.cfg.Shutdown)
 	defer cancel()
 	return s.http.Shutdown(shutdownCtx)
+}
+
+// configureTLS sets up TLS configuration with optional mTLS
+func (s *Server) configureTLS() (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		},
+	}
+
+	// Configure client certificate authentication if CA is provided
+	if s.cfg.ClientCA != "" {
+		caCert, err := ioutil.ReadFile(s.cfg.ClientCA)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read client CA certificate: %w", err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse client CA certificate")
+		}
+
+		tlsConfig.ClientCAs = caCertPool
+		if s.cfg.RequireMTLS {
+			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		} else {
+			tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
+		}
+	}
+
+	return tlsConfig, nil
+}
+
+// requireClientCert is middleware that validates client certificates
+func (s *Server) requireClientCert(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// If mTLS is not required, check if client cert is present and valid
+		if r.TLS == nil {
+			log.Printf("No TLS connection for authenticated endpoint")
+			http.Error(w, "TLS required", http.StatusUpgradeRequired)
+			return
+		}
+
+		if len(r.TLS.PeerCertificates) == 0 {
+			if s.cfg.RequireMTLS {
+				log.Printf("No client certificate provided for authenticated endpoint")
+				http.Error(w, "Client certificate required", http.StatusUnauthorized)
+				return
+			}
+		} else {
+			// Log client certificate info for audit purposes
+			cert := r.TLS.PeerCertificates[0]
+			log.Printf("Authenticated request from client: %s (issued by: %s)", 
+				cert.Subject.CommonName, cert.Issuer.CommonName)
+		}
+
+		next(w, r)
+	}
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -22,15 +22,18 @@ func main() {
 	}
 
 	srv, err := server.New(server.Config{
-		HTTPAddr:        addr,
-		GRPCAddr:        grpcAddr,
-		TLSCertPath:     certFile,
-		TLSKeyPath:      keyFile,
-		RootCAPath:      caFile,
-		GoogleClientID:  googleClientID,
-		OPAURL:          getenv("OPA_URL", "http://opa:8181"),
-		InventoryAPI:    getenv("INVENTORY_API", "http://inventory:8080"),
-		DeviceCertHours: getenvDuration("DEVICE_CERT_HOURS", 4*time.Hour),
+		HTTPAddr:            addr,
+		GRPCAddr:            grpcAddr,
+		TLSCertPath:         certFile,
+		TLSKeyPath:          keyFile,
+		RootCAPath:          caFile,
+		GoogleClientID:      googleClientID,
+		OPAURL:              getenv("OPA_URL", "http://opa:8181"),
+		InventoryAPI:        getenv("INVENTORY_API", "http://inventory:8080"),
+		InventoryClientCert: getenv("AUTHZ_CLIENT_CERT", ""),
+		InventoryClientKey:  getenv("AUTHZ_CLIENT_KEY", ""),
+		InventoryCA:         getenv("AUTHZ_CA_CERT", ""),
+		DeviceCertHours:     getenvDuration("DEVICE_CERT_HOURS", 4*time.Hour),
 	})
 	if err != nil {
 		log.Fatalf("failed to create authz server: %v", err)

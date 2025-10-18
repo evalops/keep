@@ -11,12 +11,14 @@ import (
 
 func main() {
 	cfg := serverpkg.Config{
-		Addr:      envOrDefault("INVENTORY_ADDR", ":8080"),
-		DSN:       envOrDefault("INVENTORY_DSN", "postgres://postgres:postgres@postgres:5432/keep?sslmode=disable"),
-		TLSCert:   envOrDefault("INVENTORY_TLS_CERT", ""),
-		TLSKey:    envOrDefault("INVENTORY_TLS_KEY", ""),
-		AuthzJWKS: envOrDefault("AUTHZ_JWKS_URL", ""),
-		Shutdown:  5 * time.Second,
+		Addr:        envOrDefault("INVENTORY_ADDR", ":8080"),
+		DSN:         envOrDefault("INVENTORY_DSN", "postgres://postgres:postgres@postgres:5432/keep?sslmode=disable"),
+		TLSCert:     envOrDefault("INVENTORY_TLS_CERT", ""),
+		TLSKey:      envOrDefault("INVENTORY_TLS_KEY", ""),
+		ClientCA:    envOrDefault("INVENTORY_CLIENT_CA", ""),
+		AuthzJWKS:   envOrDefault("AUTHZ_JWKS_URL", ""),
+		Shutdown:    5 * time.Second,
+		RequireMTLS: envOrDefault("INVENTORY_REQUIRE_MTLS", "false") == "true",
 	}
 
 	srv, err := serverpkg.NewServer(cfg)

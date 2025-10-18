@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -19,18 +20,22 @@ import (
 
 	"github.com/EvalOps/keep/pkg/pki"
 	"github.com/EvalOps/keep/services/authz/token"
+	"tailscale.com/tsnet"
 )
 
 type Server struct {
-	cfg       Config
-	httpSrv   *http.Server
-	ca        *pki.CertificateAuthority
-	client    *http.Client
-	invClient *http.Client
-	mu        sync.Mutex
-	started   bool
-	useTLS    bool
-	rootCAPEM []byte
+	cfg        Config
+	httpSrv    *http.Server
+	ca         *pki.CertificateAuthority
+	client     *http.Client
+	invClient  *http.Client
+	mu         sync.Mutex
+	started    bool
+	useTLS     bool
+	rootCAPEM  []byte
+	tsServer   *tsnet.Server
+	tsListener net.Listener
+	tsHTTP     *http.Server
 }
 
 func New(cfg Config) (*Server, error) {
@@ -44,9 +49,19 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	invClient := &http.Client{Timeout: 3 * time.Second}
+	
+	// Configure inventory client with optional mTLS
+	invClient, err := configureInventoryClient(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("configure inventory client: %w", err)
+	}
 
-	s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient}
+tsSrv, tailscaleListener, err := setupTailscale(cfg)
+if err != nil {
+	return nil, err
+}
+
+s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: tsSrv, tsListener: tailscaleListener}
 	h := http.NewServeMux()
 	h.HandleFunc("/health", s.healthHandler)
 	h.HandleFunc("/v1/auth/verify", s.verifyHandler)
@@ -89,6 +104,11 @@ func New(cfg Config) (*Server, error) {
 		s.useTLS = true
 		s.rootCAPEM = rootCAPEM
 	} else {
+ if tailscaleListener != nil {
+  s.tsHTTP = &http.Server{Handler: h}
+  s.tsListener = tailscaleListener
+ }
+
 		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: h}
 		var err error
 		s.rootCAPEM, err = ca.CertificatePEM()
@@ -121,10 +141,30 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	if s.tsHTTP != nil && s.tsListener != nil {
+		go func() {
+			if err := s.tsHTTP.Serve(s.tsListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Printf("tailscale http server error: %v", err)
+			}
+		}()
+	}
+
 	<-ctx.Done()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return s.httpSrv.Shutdown(shutdownCtx)
+	var shutdownErr error
+	if err := s.httpSrv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		shutdownErr = err
+	}
+	if s.tsHTTP != nil {
+		if err := s.tsHTTP.Shutdown(shutdownCtx); err != nil && shutdownErr == nil {
+			shutdownErr = err
+		}
+	}
+	if s.tsServer != nil {
+		s.tsServer.Close()
+	}
+	return shutdownErr
 }
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +232,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 	headers := toLowerKeys(req.Attributes.Request.HTTP.Headers)
 	authHeader := headers["authorization"]
-	deviceID := headers["x-device-id"]
+	deviceID, subject := extractDeviceContext(headers)
 	clientIP := headers["x-forwarded-for"]
 	if clientIP == "" {
 		clientIP = headers["x-envoy-external-address"]
@@ -231,8 +271,8 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 		if deviceID != "" {
 			w.Header().Set("x-device-id", deviceID)
 		}
-		if subj := headers["x-forwarded-client-cert"]; subj != "" {
-			w.Header().Set("x-client-subject", subj)
+		if subject != "" {
+			w.Header().Set("x-client-subject", subject)
 		}
 		w.WriteHeader(http.StatusOK)
 	case "step-up":
@@ -305,6 +345,26 @@ func toLowerKeys(in map[string]string) map[string]string {
 		out[strings.ToLower(k)] = v
 	}
 	return out
+}
+
+func extractDeviceContext(headers map[string]string) (deviceID, subject string) {
+	deviceID = headers["x-device-id"]
+	subject = parseXFCC(headers["x-forwarded-client-cert"])
+	return deviceID, subject
+}
+
+func parseXFCC(xfcc string) string {
+	if xfcc == "" {
+		return ""
+	}
+	parts := strings.Split(xfcc, ";")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if strings.HasPrefix(p, "Subject=") {
+			return strings.TrimPrefix(p, "Subject=")
+		}
+	}
+	return xfcc
 }
 
 func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]any {
@@ -399,4 +459,45 @@ func decodePEMBlock(p string) ([]byte, error) {
 		return nil, errors.New("invalid pem")
 	}
 	return block.Bytes, nil
+}
+
+// configureInventoryClient creates an HTTP client with optional mTLS for inventory service communication
+func configureInventoryClient(cfg Config) (*http.Client, error) {
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
+	}
+
+	// Configure client certificate authentication if provided
+	if cfg.InventoryClientCert != "" && cfg.InventoryClientKey != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.InventoryClientCert, cfg.InventoryClientKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		}
+
+		transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
+		log.Printf("Configured mTLS client certificate for inventory service")
+	}
+
+	// Configure server certificate validation if CA is provided
+	if cfg.InventoryCA != "" {
+		caCert, err := os.ReadFile(cfg.InventoryCA)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read inventory CA certificate: %w", err)
+		}
+
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			return nil, fmt.Errorf("failed to parse inventory CA certificate")
+		}
+
+		transport.TLSClientConfig.RootCAs = caCertPool
+		log.Printf("Configured custom CA for inventory service validation")
+	}
+
+	return &http.Client{
+		Timeout:   3 * time.Second,
+		Transport: transport,
+	}, nil
 }

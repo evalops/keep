@@ -1,0 +1,71 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-keep}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  inventory:
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    environment:
+      INVENTORY_DSN: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-keep}?sslmode=disable
+      INVENTORY_TLS_CERT: ${INVENTORY_TLS_CERT:-""}
+      INVENTORY_TLS_KEY: ${INVENTORY_TLS_KEY:-""}
+      INVENTORY_CLIENT_CA: ${INVENTORY_CLIENT_CA:-""}
+    depends_on:
+      - postgres
+    volumes:
+      - ./certs:/certs:ro
+
+  opa:
+    image: openpolicyagent/opa:latest
+    command:
+      - "run"
+      - "--server"
+      - "--config-file=/policies/config.yaml"
+    volumes:
+      - ./policies:/policies
+
+  envoy:
+    build:
+      context: .
+      dockerfile: envoy/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - authz
+      - app
+
+  authz:
+    build:
+      context: .
+      dockerfile: services/authz/Dockerfile
+    environment:
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      OPA_URL: http://opa:8181
+      INVENTORY_API: http://inventory:8080
+      AUTHZ_CLIENT_CERT: ${AUTHZ_CLIENT_CERT:-""}
+      AUTHZ_CLIENT_KEY: ${AUTHZ_CLIENT_KEY:-""}
+      AUTHZ_CA_CERT: ${AUTHZ_CA_CERT:-""}
+    depends_on:
+      - opa
+      - inventory
+    volumes:
+      - ./certs:/certs:ro
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+
+volumes:
+  postgres-data: {}
