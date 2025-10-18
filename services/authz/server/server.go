@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -22,13 +21,13 @@ import (
 )
 
 type Server struct {
-	cfg          Config
-	httpSrv      *http.Server
-	grpcListener net.Listener
-	ca           *pki.CertificateAuthority
-	client       *http.Client
-	mu           sync.Mutex
-	started      bool
+	cfg       Config
+	httpSrv   *http.Server
+	ca        *pki.CertificateAuthority
+	client    *http.Client
+	invClient *http.Client
+	mu        sync.Mutex
+	started   bool
 }
 
 func New(cfg Config) (*Server, error) {
@@ -42,8 +41,9 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	client := &http.Client{Timeout: 5 * time.Second}
+	invClient := &http.Client{Timeout: 3 * time.Second}
 
-	s := &Server{cfg: cfg, ca: ca, client: client}
+	s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient}
 	h := http.NewServeMux()
 	h.HandleFunc("/health", s.healthHandler)
 	h.HandleFunc("/v1/auth/verify", s.verifyHandler)
@@ -148,7 +148,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 				"email":  claims["email"],
 				"groups": claims["groups"],
 			},
-			"device_id": deviceID,
+			"device":    s.lookupDevice(ctx, deviceID),
 			"client_ip": clientIP,
 		},
 	}
@@ -189,6 +189,55 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 type deviceCertRequest struct {
 	DeviceID string `json:"device_id"`
 	CSR      string `json:"csr"`
+}
+
+type inventoryDevice struct {
+	ID        string `json:"id"`
+	Posture   string `json:"posture"`
+	PublicKey string `json:"public_key"`
+}
+
+func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]any {
+	if deviceID == "" || s.cfg.InventoryAPI == "" {
+		return map[string]any{"id": deviceID, "posture": "unknown"}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/v1/devices/%s", s.cfg.InventoryAPI, deviceID), nil)
+	if err != nil {
+		log.Printf("inventory request build failed: %v", err)
+		return map[string]any{"id": deviceID, "posture": "unknown"}
+	}
+
+	resp, err := s.invClient.Do(req)
+	if err != nil {
+		log.Printf("inventory request failed: %v", err)
+		return map[string]any{"id": deviceID, "posture": "unknown"}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return map[string]any{"id": deviceID, "posture": "unregistered"}
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		log.Printf("inventory error %d: %s", resp.StatusCode, string(b))
+		return map[string]any{"id": deviceID, "posture": "unknown"}
+	}
+
+	var device inventoryDevice
+	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
+		log.Printf("inventory decode failed: %v", err)
+		return map[string]any{"id": deviceID, "posture": "unknown"}
+	}
+
+	if device.Posture == "" {
+		device.Posture = "unknown"
+	}
+
+	return map[string]any{
+		"id":      device.ID,
+		"posture": device.Posture,
+	}
 }
 
 func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
