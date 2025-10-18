@@ -1,0 +1,3 @@
+!envoy.yaml
+!certs/
+!lua/
