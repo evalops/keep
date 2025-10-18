@@ -20,6 +20,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rs/zerolog"
+
+	"github.com/EvalOps/keep/pkg/logging"
+	"github.com/EvalOps/keep/pkg/metrics"
 	"github.com/EvalOps/keep/pkg/pki"
 	"github.com/EvalOps/keep/services/authz/token"
 	"tailscale.com/tsnet"
@@ -80,12 +85,14 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 	
 	// Add middleware
 	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger)
+	r.Use(s.loggingMiddleware)
+	r.Use(s.metricsMiddleware)  
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
-	// Health endpoint
+	// Health and metrics endpoints
 	r.Get("/health", s.healthHandler)
+	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 	
 	// API routes
 	r.Route("/v1", func(r chi.Router) {
@@ -648,4 +655,53 @@ func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(status)
+}
+
+// loggingMiddleware provides structured logging for all requests
+func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		
+		// Create request logger
+		requestID := middleware.GetReqID(r.Context())
+		logger := logging.NewRequestLogger(r.Context(), requestID)
+		
+		// Add logger to context
+		ctx := logger.WithContext(r.Context())
+		r = r.WithContext(ctx)
+		
+		// Wrap response writer to capture status code
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		
+		// Process request
+		next.ServeHTTP(ww, r)
+		
+		// Log request completion
+		duration := time.Since(start)
+		clientIP := r.Header.Get("X-Forwarded-For")
+		if clientIP == "" {
+			clientIP = r.RemoteAddr
+		}
+		
+		logging.LogRequest(logger, r.Method, r.URL.Path, r.UserAgent(), clientIP, duration, ww.Status())
+	})
+}
+
+// metricsMiddleware records Prometheus metrics for all requests
+func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		
+		// Wrap response writer to capture status code
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		
+		// Process request
+		next.ServeHTTP(ww, r)
+		
+		// Record metrics
+		duration := time.Since(start)
+		statusCode := fmt.Sprintf("%d", ww.Status())
+		
+		metrics.RecordHTTPRequest("authz", r.Method, r.URL.Path, statusCode, duration)
+	})
 }
