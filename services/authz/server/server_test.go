@@ -134,8 +134,8 @@ func createTestServer(t *testing.T) *Server {
 	// We can't use the real PKI here because it would create a dependency
 	// So we'll create a minimal server instance
 	server := &Server{
-		cfg:    cfg,
-		client: &http.Client{Timeout: 5 * time.Second},
+		cfg:       cfg,
+		client:    &http.Client{Timeout: 5 * time.Second},
 		invClient: &http.Client{Timeout: 3 * time.Second},
 	}
 
@@ -280,9 +280,9 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 				"request": map[string]interface{}{
 					"http": map[string]interface{}{
 						"headers": map[string]string{
-							"authorization":    "Bearer invalid.jwt.token",
-							"x-forwarded-for":  "192.168.1.100",
-							"x-device-id":      "test-device",
+							"authorization":   "Bearer invalid.jwt.token",
+							"x-forwarded-for": "192.168.1.100",
+							"x-device-id":     "test-device",
 						},
 					},
 				},
@@ -355,7 +355,7 @@ func TestServer_evaluateOPA(t *testing.T) {
 			defer mockOPA.Close()
 
 			server := createTestServerWithMocks(t, mockOPA.URL, "")
-			
+
 			claims := map[string]any{
 				"email":  "user@example.com",
 				"groups": []string{"admin"},
@@ -397,18 +397,18 @@ func createTestServerWithMocks(t *testing.T, opaURL, inventoryURL string) *Serve
 	return server
 }
 
-// TestServer_lookupDevice tests the device lookup functionality  
+// TestServer_lookupDevice tests the device lookup functionality
 func TestServer_lookupDevice(t *testing.T) {
 	t.Run("returns unknown posture when no inventory URL", func(t *testing.T) {
 		server := createTestServerWithMocks(t, "", "")
-		
+
 		result := server.lookupDevice(context.Background(), "test-device")
-		
+
 		expected := map[string]any{
 			"id":      "test-device",
 			"posture": "unknown",
 		}
-		
+
 		if result["id"] != expected["id"] || result["posture"] != expected["posture"] {
 			t.Errorf("Expected %v, got %v", expected, result)
 		}
@@ -421,9 +421,9 @@ func TestServer_lookupDevice(t *testing.T) {
 		defer mockInventory.Close()
 
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
-		
+
 		result := server.lookupDevice(context.Background(), "nonexistent-device")
-		
+
 		if result["posture"] != "unregistered" {
 			t.Errorf("Expected posture 'unregistered', got %v", result["posture"])
 		}
@@ -445,9 +445,9 @@ func TestServer_lookupDevice(t *testing.T) {
 		defer mockInventory.Close()
 
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
-		
+
 		result := server.lookupDevice(context.Background(), "test-device")
-		
+
 		if result["id"] != expectedDevice["id"] || result["posture"] != expectedDevice["posture"] {
 			t.Errorf("Expected device info %v, got %v", expectedDevice, result)
 		}
@@ -455,9 +455,9 @@ func TestServer_lookupDevice(t *testing.T) {
 
 	t.Run("handles empty device ID", func(t *testing.T) {
 		server := createTestServerWithMocks(t, "", "http://inventory:8080")
-		
+
 		result := server.lookupDevice(context.Background(), "")
-		
+
 		if result["posture"] != "unknown" {
 			t.Errorf("Expected posture 'unknown' for empty device ID, got %v", result["posture"])
 		}
@@ -470,9 +470,9 @@ func TestServer_lookupDevice(t *testing.T) {
 		defer mockInventory.Close()
 
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
-		
+
 		result := server.lookupDevice(context.Background(), "test-device")
-		
+
 		if result["posture"] != "unknown" {
 			t.Errorf("Expected posture 'unknown' for service error, got %v", result["posture"])
 		}
@@ -568,7 +568,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 		req.RemoteAddr = "100.65.1.1:12345"
 
 		result := server.validateTailscaleAccess(req)
-		
+
 		if result != false {
 			t.Error("Expected false when no Tailscale server configured")
 		}
@@ -582,7 +582,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 		req.RemoteAddr = "192.168.1.1:12345" // Not in Tailscale range
 
 		result := server.validateTailscaleAccess(req)
-		
+
 		if result != false {
 			t.Error("Expected false for non-Tailscale IP range")
 		}
@@ -596,7 +596,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 		req.RemoteAddr = "100.65.1.1:12345" // Valid Tailscale IP
 
 		result := server.validateTailscaleAccess(req)
-		
+
 		if result != true {
 			t.Error("Expected true for valid Tailscale IP range")
 		}
@@ -609,7 +609,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 		req.RemoteAddr = "invalid-address"
 
 		result := server.validateTailscaleAccess(req)
-		
+
 		if result != false {
 			t.Error("Expected false for invalid remote address format")
 		}
@@ -622,7 +622,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 		req.RemoteAddr = ""
 
 		result := server.validateTailscaleAccess(req)
-		
+
 		if result != false {
 			t.Error("Expected false for empty remote address")
 		}

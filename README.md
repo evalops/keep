@@ -149,6 +149,106 @@ services/authz           # Authz service implementation
 services/inventory       # Inventory service implementation
 ```
 
+## Threat Model (PoC lens)
+
+**Attacker goals**
+
+- Replay or forge Google ID tokens to impersonate users and access protected endpoints.
+- Register untrusted devices or tamper with device posture data to bypass policy controls.
+- Compromise inter-service traffic (inventory, MFA, OPA) to leak or overwrite authorization context.
+- Steal configuration secrets (Google client ID, TLS keys) to weaken trust assumptions.
+
+**Controls in place**
+
+- Google JWKS validation, token expiry, and audience checks inside the authz service.
+- Mutual TLS between Envoy and backend services; device certificates issued via CSR and short lifetimes.
+- OPA policy decisions requiring healthy posture and supporting step-up MFA for risky scenarios.
+- OpenTelemetry traces/metrics plus dependency timing for visibility into service interactions.
+- Kubernetes manifests with readiness/liveness probes, resource budgets, and ConfigMap/Secret-driven configuration.
+
+**Known gaps**
+
+- Device posture updates are unauthenticated; real attestation agent verification is not implemented.
+- Secrets are sourced from environment variables/ConfigMaps—no dedicated KMS integration.
+- No rate limiting, anomaly detection, or audit persistence beyond logs/traces.
+- Telemetry endpoint is assumed trusted; no auth/tenant isolation.
+
+## Policy Examples
+
+```rego
+package keep.authz
+
+default decision := "deny"
+
+allow {
+  input.user.email == "alice@example.com"
+  input.device.posture == "healthy"
+}
+
+step_up {
+  input.user.email == "bob@example.com"
+  input.device.trust_score < 70
+}
+
+decision := "allow" {
+  allow
+}
+
+decision := "step-up" {
+  step_up
+}
+```
+
+**Decision log example**
+
+```json
+{
+  "request_id": "d4f6a985-bc7d-4c7d-9f0d-42c8b0d5c321",
+  "user": {
+    "email": "bob@example.com",
+    "groups": ["engineering", "contractor"]
+  },
+  "device": {
+    "id": "device-123",
+    "posture": "healthy",
+    "trust_score": 65
+  },
+  "client_ip": "203.0.113.24",
+  "decision": "step-up",
+  "reason": "low_trust_score",
+  "timestamp": "2025-02-18T12:34:56Z"
+}
+```
+
+## Curl Demos
+
+- **Allow (HTTP 200, forwarded headers)**
+
+  ```bash
+  curl -k -H "Authorization: Bearer <valid-token>" \
+       -H "X-Device-ID: device-healthy" \
+       https://localhost:8080/
+  # Expect: 200 OK with X-Device-Id/X-Client-Subject headers from Envoy
+  ```
+
+- **Deny (HTTP 403)**
+
+  ```bash
+  curl -k -H "Authorization: Bearer <revoked-token>" \
+       -H "X-Device-ID: unknown" \
+       https://localhost:8080/
+  # Expect: 403 Forbidden with "forbidden" body
+  ```
+
+- **Step-up required (HTTP 403 + JSON)**
+
+  ```bash
+  curl -k -H "Authorization: Bearer <valid-token>" \
+       -H "X-Device-ID: device-risky" \
+       https://localhost:8080/
+  # Expect: 403 with JSON {"error":"mfa_required","mfa_url":...,"session_id":...}
+  ```
+
 ## Future Enhancements
 
 - Implement real device attestation agent interactions.
