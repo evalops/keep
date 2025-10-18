@@ -1,5 +1,7 @@
 import os
 import time
+from typing import Optional
+from urllib.parse import quote_plus
 
 import pytest
 
@@ -14,13 +16,50 @@ TRANSIENT_CODES = {
     "57P03",
 }
 
+DEFAULT_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/app_test"
 
-def _sqlstate(exc: Exception) -> str | None:
+
+def _sqlstate(exc: Exception) -> Optional[str]:
     code = getattr(exc, "pgcode", None)
     if isinstance(code, str):
         return code
     code = getattr(exc, "sqlstate", None)
     return code if isinstance(code, str) else None
+
+
+def _build_dsn_from_pg_env() -> Optional[str]:
+    user = os.getenv("PGUSER")
+    host = os.getenv("PGHOST")
+    database = os.getenv("PGDATABASE")
+    if not user or not host or not database:
+        return None
+
+    password = os.getenv("PGPASSWORD", "")
+    port = os.getenv("PGPORT", "5432")
+    sslmode = os.getenv("PGSSLMODE")
+
+    user_segment = quote_plus(user)
+    auth = user_segment
+    if password:
+        auth = f"{user_segment}:{quote_plus(password)}"
+
+    dsn = f"postgresql://{auth}@{host}:{port}/{database}"
+    if sslmode:
+        connector = "&" if "?" in dsn else "?"
+        dsn = f"{dsn}{connector}sslmode={sslmode}"
+    return dsn
+
+
+def resolve_dsn() -> str:
+    dsn = os.getenv("DATABASE_URL")
+    if dsn:
+        return dsn
+
+    env_dsn = _build_dsn_from_pg_env()
+    if env_dsn:
+        return env_dsn
+
+    return DEFAULT_DSN
 
 
 def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
@@ -52,9 +91,5 @@ def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_database_ready() -> None:
-    dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise RuntimeError(
-            "DATABASE_URL is required for tests. Set it to postgresql://postgres:postgres@127.0.0.1:5432/app_test"
-        )
+    dsn = resolve_dsn()
     wait_for_database(dsn)
