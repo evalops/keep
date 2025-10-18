@@ -67,7 +67,7 @@ func createAzureCredential(cfg Config) (azcore.TokenCredential, error) {
 // GetSecret retrieves a secret from Azure Key Vault
 func (m *AzureManager) GetSecret(ctx context.Context, key string) (string, error) {
 	secretName := m.normalizeSecretName(key)
-	
+
 	// Get the latest version of the secret
 	resp, err := m.client.GetSecret(ctx, secretName, "", nil)
 	if err != nil {
@@ -99,7 +99,7 @@ func (m *AzureManager) GetSecrets(ctx context.Context, keys []string) (map[strin
 // SetSecret stores a secret in Azure Key Vault
 func (m *AzureManager) SetSecret(ctx context.Context, key, value string) error {
 	secretName := m.normalizeSecretName(key)
-	
+
 	parameters := azsecrets.SetSecretParameters{
 		Value: &value,
 	}

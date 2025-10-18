@@ -71,39 +71,39 @@ func (p *DevicePosture) ToJSON() (string, error) {
 // CalculateTrustScore calculates an overall trust score based on posture
 func (p *DevicePosture) CalculateTrustScore() {
 	score := 0
-	
+
 	// OS support (20 points)
 	if p.OS.Supported {
 		score += 20
 	}
-	
+
 	// Firewall enabled (25 points)
 	if p.Firewall.Enabled {
 		score += 25
 	}
-	
+
 	// Antivirus (15 points)
 	if p.AntiVirus {
 		score += 15
 	}
-	
+
 	// System updated (20 points)
 	if p.SystemUpdate {
 		score += 20
 	}
-	
+
 	// Disk encryption (15 points)
 	if p.DiskEncrypted {
 		score += 15
 	}
-	
+
 	// Screen lock (5 points)
 	if p.ScreenLock {
 		score += 5
 	}
-	
+
 	p.TrustScore = score
-	
+
 	// Set status based on score
 	switch {
 	case score >= 80:
@@ -143,13 +143,13 @@ func runCommand(name string, args ...string) (string, error) {
 func parseKeyValue(text string) map[string]string {
 	result := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(text))
-	
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		
+
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) == 2 {
 			key := strings.TrimSpace(parts[0])
@@ -157,7 +157,7 @@ func parseKeyValue(text string) map[string]string {
 			result[key] = value
 		}
 	}
-	
+
 	return result
 }
 

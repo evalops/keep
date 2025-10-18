@@ -105,9 +105,9 @@ func (h *Helper) LoadDatabaseConfig() map[string]string {
 // LoadTLSConfig loads TLS configuration from secrets
 func (h *Helper) LoadTLSConfig(prefix string) map[string]string {
 	return h.GetMultipleOrDefaults(map[string]string{
-		prefix + "_TLS_CERT":   "",
-		prefix + "_TLS_KEY":    "",
-		prefix + "_CLIENT_CA":  "",
+		prefix + "_TLS_CERT":    "",
+		prefix + "_TLS_KEY":     "",
+		prefix + "_CLIENT_CA":   "",
 		prefix + "_CLIENT_CERT": "",
 		prefix + "_CLIENT_KEY":  "",
 	})
@@ -116,11 +116,11 @@ func (h *Helper) LoadTLSConfig(prefix string) map[string]string {
 // LoadAPIKeys loads API keys and tokens from secrets
 func (h *Helper) LoadAPIKeys() map[string]string {
 	return h.GetMultipleOrDefaults(map[string]string{
-		"GOOGLE_CLIENT_ID":       "",
-		"TAILSCALE_AUTH_KEY":     "",
-		"TAILSCALE_API_KEY":      "",
-		"JWT_SIGNING_KEY":        "",
-		"WEBHOOK_SECRET":         "",
+		"GOOGLE_CLIENT_ID":   "",
+		"TAILSCALE_AUTH_KEY": "",
+		"TAILSCALE_API_KEY":  "",
+		"JWT_SIGNING_KEY":    "",
+		"WEBHOOK_SECRET":     "",
 	})
 }
 
@@ -142,7 +142,7 @@ func (h *Helper) BuildDSN(dbConfig map[string]string) string {
 // BuildPostgresDSN builds a PostgreSQL connection string
 func BuildPostgresDSN(user, password, host, port, dbname string) string {
 	var parts []string
-	
+
 	if user != "" {
 		parts = append(parts, "user="+user)
 	}
@@ -158,10 +158,10 @@ func BuildPostgresDSN(user, password, host, port, dbname string) string {
 	if dbname != "" {
 		parts = append(parts, "dbname="+dbname)
 	}
-	
+
 	// Add default SSL mode for security
 	parts = append(parts, "sslmode=prefer")
-	
+
 	return "postgres://" + strings.Join(parts, " ")
 }
 

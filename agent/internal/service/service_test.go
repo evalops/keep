@@ -77,18 +77,18 @@ func TestService_initialRegistration(t *testing.T) {
 		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/v1/devices" && r.Method == http.MethodPost {
 				registrationRequests++
-				
+
 				var req registerRequest
 				json.NewDecoder(r.Body).Decode(&req)
-				
+
 				if req.ID != "test-device" {
 					t.Errorf("Expected device ID 'test-device', got %s", req.ID)
 				}
-				
+
 				if req.PublicKey == "" {
 					t.Error("Expected public key, got empty string")
 				}
-				
+
 				if req.Posture == "" {
 					t.Error("Expected posture data, got empty string")
 				}
@@ -110,7 +110,7 @@ func TestService_initialRegistration(t *testing.T) {
 		}
 
 		service := New(config)
-		
+
 		// Set mock posture collector
 		service.collector = &mockPostureCollector{
 			postureData: &posture.DevicePosture{
@@ -145,7 +145,7 @@ func TestService_initialRegistration(t *testing.T) {
 		}
 
 		service := New(config)
-		
+
 		// Set mock posture collector that fails
 		service.collector = &mockPostureCollector{
 			shouldError: true,
@@ -183,7 +183,7 @@ func TestService_initialRegistration(t *testing.T) {
 		}
 
 		service := New(config)
-		
+
 		// Set mock posture collector
 		service.collector = &mockPostureCollector{
 			postureData: &posture.DevicePosture{
@@ -215,14 +215,14 @@ func TestService_updatePosture(t *testing.T) {
 		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.URL.Path, "/posture") && r.Method == http.MethodPost {
 				updateRequests++
-				
+
 				var req updatePostureRequest
 				json.NewDecoder(r.Body).Decode(&req)
-				
+
 				if req.ID != "test-device" {
 					t.Errorf("Expected device ID 'test-device', got %s", req.ID)
 				}
-				
+
 				if req.Posture == "" {
 					t.Error("Expected posture data, got empty string")
 				}
@@ -241,7 +241,7 @@ func TestService_updatePosture(t *testing.T) {
 		}
 
 		service := New(config)
-		
+
 		// Set mock posture collector
 		service.collector = &mockPostureCollector{
 			postureData: &posture.DevicePosture{
@@ -268,7 +268,7 @@ func TestService_updatePosture(t *testing.T) {
 		}
 
 		service := New(config)
-		
+
 		// Set mock posture collector that fails
 		service.collector = &mockPostureCollector{
 			shouldError: true,
@@ -291,14 +291,14 @@ func TestService_obtainCertificate(t *testing.T) {
 		mockAuthz := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/v1/certs/device" && r.Method == http.MethodPost {
 				certRequests++
-				
+
 				var req map[string]string
 				json.NewDecoder(r.Body).Decode(&req)
-				
+
 				if req["device_id"] != "test-device" {
 					t.Errorf("Expected device ID 'test-device', got %s", req["device_id"])
 				}
-				
+
 				if req["csr"] == "" {
 					t.Error("Expected CSR, got empty string")
 				}

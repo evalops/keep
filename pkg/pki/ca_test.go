@@ -206,7 +206,7 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 
 	t.Run("uses default TTL when zero", func(t *testing.T) {
 		subject := pkix.Name{CommonName: "test-device"}
-		
+
 		certPEM, err := ca.IssueCertificate(subject, nil, nil, 0, &priv.PublicKey)
 		if err != nil {
 			t.Fatalf("IssueCertificate failed: %v", err)
@@ -410,7 +410,7 @@ func BenchmarkLoadOrCreateCA(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		certPath := filepath.Join(tmpDir, "bench-ca.pem")
 		keyPath := filepath.Join(tmpDir, "bench-ca-key.pem")
-		
+
 		_, err := LoadOrCreateCA(certPath, keyPath, "bench-ca", time.Hour*24)
 		if err != nil {
 			b.Fatalf("LoadOrCreateCA failed: %v", err)

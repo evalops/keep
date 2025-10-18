@@ -21,27 +21,27 @@ import (
 
 // Config holds the service configuration
 type Config struct {
-	DeviceID         string
-	InventoryURL     string
-	AttestURL        string
-	KeyPath          string
-	CertPath         string
-	CAPath           string
-	RefreshPeriod    time.Duration
-	PostureInterval  time.Duration
-	LogLevel         string
-	PIDFile          string
-	Daemonize        bool
+	DeviceID        string
+	InventoryURL    string
+	AttestURL       string
+	KeyPath         string
+	CertPath        string
+	CAPath          string
+	RefreshPeriod   time.Duration
+	PostureInterval time.Duration
+	LogLevel        string
+	PIDFile         string
+	Daemonize       bool
 }
 
 // Service represents the attestor agent service
 type Service struct {
-	config    *Config
-	collector posture.Collector
+	config     *Config
+	collector  posture.Collector
 	privateKey *ecdsa.PrivateKey
-	ctx       context.Context
-	cancel    context.CancelFunc
-	logger    *log.Logger
+	ctx        context.Context
+	cancel     context.CancelFunc
+	logger     *log.Logger
 }
 
 // registerRequest represents device registration payload
@@ -65,9 +65,9 @@ type certResponse struct {
 // New creates a new attestor service
 func New(config *Config) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	logger := log.New(os.Stdout, "[AttestorAgent] ", log.LstdFlags|log.Lshortfile)
-	
+
 	return &Service{
 		config:    config,
 		collector: posture.GetCollector(),
@@ -80,14 +80,14 @@ func New(config *Config) *Service {
 // Start begins the service operation
 func (s *Service) Start() error {
 	s.logger.Printf("Starting Attestor Agent service for device %s", s.config.DeviceID)
-	
+
 	// Handle daemon mode
 	if s.config.Daemonize {
 		if err := s.daemonize(); err != nil {
 			return fmt.Errorf("failed to daemonize: %w", err)
 		}
 	}
-	
+
 	// Write PID file
 	if s.config.PIDFile != "" {
 		if err := s.writePIDFile(); err != nil {
@@ -95,34 +95,34 @@ func (s *Service) Start() error {
 		}
 		defer s.removePIDFile()
 	}
-	
+
 	// Setup signal handling
 	s.setupSignalHandling()
-	
+
 	// Initialize private key
 	if err := s.initializeKey(); err != nil {
 		return fmt.Errorf("failed to initialize key: %w", err)
 	}
-	
+
 	// Collect initial posture and register device
 	if err := s.initialRegistration(); err != nil {
 		return fmt.Errorf("initial registration failed: %w", err)
 	}
-	
+
 	// Obtain initial certificate
 	if err := s.obtainCertificate(); err != nil {
 		return fmt.Errorf("failed to obtain initial certificate: %w", err)
 	}
-	
+
 	// Start periodic tasks
 	go s.runPeriodicTasks()
-	
+
 	s.logger.Println("Attestor Agent service started successfully")
-	
+
 	// Wait for shutdown signal
 	<-s.ctx.Done()
 	s.logger.Println("Attestor Agent service shutting down...")
-	
+
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (s *Service) Stop() error {
 func (s *Service) setupSignalHandling() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-	
+
 	go func() {
 		for {
 			select {
@@ -183,19 +183,19 @@ func (s *Service) initialRegistration() error {
 	if err != nil {
 		return fmt.Errorf("collect posture: %w", err)
 	}
-	
+
 	postureJSON, err := postureData.ToJSON()
 	if err != nil {
 		return fmt.Errorf("serialize posture: %w", err)
 	}
-	
+
 	s.logger.Printf("Device posture: status=%s, score=%d", postureData.Status, postureData.TrustScore)
-	
+
 	pubPEM, err := pki.PublicKeyPEM(s.privateKey)
 	if err != nil {
 		return fmt.Errorf("public key pem: %w", err)
 	}
-	
+
 	return s.registerDevice(string(pubPEM), postureJSON)
 }
 
@@ -203,12 +203,12 @@ func (s *Service) initialRegistration() error {
 func (s *Service) runPeriodicTasks() {
 	certTicker := time.NewTicker(s.config.RefreshPeriod)
 	postureTicker := time.NewTicker(s.config.PostureInterval)
-	
+
 	defer func() {
 		certTicker.Stop()
 		postureTicker.Stop()
 	}()
-	
+
 	for {
 		select {
 		case <-certTicker.C:
@@ -218,7 +218,7 @@ func (s *Service) runPeriodicTasks() {
 			} else {
 				s.logger.Println("Certificate renewed successfully")
 			}
-			
+
 		case <-postureTicker.C:
 			s.logger.Println("Updating device posture...")
 			if err := s.updatePosture(); err != nil {
@@ -226,7 +226,7 @@ func (s *Service) runPeriodicTasks() {
 			} else {
 				s.logger.Println("Posture updated successfully")
 			}
-			
+
 		case <-s.ctx.Done():
 			return
 		}
@@ -239,31 +239,31 @@ func (s *Service) updatePosture() error {
 	if err != nil {
 		return fmt.Errorf("collect posture: %w", err)
 	}
-	
+
 	postureJSON, err := postureData.ToJSON()
 	if err != nil {
 		return fmt.Errorf("serialize posture: %w", err)
 	}
-	
+
 	s.logger.Printf("Updated posture: status=%s, score=%d", postureData.Status, postureData.TrustScore)
-	
+
 	payload := updatePostureRequest{ID: s.config.DeviceID, Posture: postureJSON}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	
+
 	url := fmt.Sprintf("%s/v1/devices/%s/posture", strings.TrimSuffix(s.config.InventoryURL, "/"), s.config.DeviceID)
 	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("posture update failed: %s", resp.Status)
 	}
-	
+
 	return nil
 }
 
@@ -274,18 +274,18 @@ func (s *Service) registerDevice(publicKey, posture string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	url := fmt.Sprintf("%s/v1/devices", strings.TrimSuffix(s.config.InventoryURL, "/"))
 	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("inventory register failed: %s", resp.Status)
 	}
-	
+
 	s.logger.Printf("Device registered successfully with inventory service")
 	return nil
 }
@@ -296,7 +296,7 @@ func (s *Service) obtainCertificate() error {
 	if err != nil {
 		return err
 	}
-	
+
 	payload := map[string]string{
 		"device_id": s.config.DeviceID,
 		"csr":       string(csrPEM),
@@ -305,27 +305,27 @@ func (s *Service) obtainCertificate() error {
 	if err != nil {
 		return err
 	}
-	
+
 	url := fmt.Sprintf("%s/v1/certs/device", strings.TrimSuffix(s.config.AttestURL, "/"))
 	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("cert request failed: %s", resp.Status)
 	}
-	
+
 	var cr certResponse
 	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil {
 		return err
 	}
-	
+
 	if err := pki.WriteCertificate(s.config.CertPath, []byte(cr.Certificate)); err != nil {
 		return err
 	}
-	
+
 	// Download CA if needed
 	if _, err := os.Stat(s.config.CAPath); err != nil {
 		rawCA, err := s.downloadCA()
@@ -339,7 +339,7 @@ func (s *Service) obtainCertificate() error {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -351,7 +351,7 @@ func (s *Service) downloadCA() ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ca download failed: %s", resp.Status)
 	}
@@ -376,16 +376,16 @@ func (s *Service) daemonize() error {
 	// This is a simplified daemonization
 	// In production, you might want to use proper daemon libraries
 	// or systemd service files
-	
+
 	if os.Getppid() == 1 {
 		// Already daemonized
 		return nil
 	}
-	
+
 	// Fork and exit parent
 	// Note: This is a basic implementation
 	// For robust daemonization, consider using libraries like
 	// github.com/sevlyar/go-daemon or systemd service files
-	
+
 	return nil
 }

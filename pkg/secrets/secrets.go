@@ -63,19 +63,19 @@ func (m *EnvManager) GetSecret(ctx context.Context, key string) (string, error) 
 	if m.prefix != "" {
 		envKey = m.prefix + key
 	}
-	
+
 	value := os.Getenv(envKey)
 	if value == "" {
 		return "", fmt.Errorf("secret not found: %s", key)
 	}
-	
+
 	return value, nil
 }
 
 // GetSecrets retrieves multiple secrets from environment variables
 func (m *EnvManager) GetSecrets(ctx context.Context, keys []string) (map[string]string, error) {
 	results := make(map[string]string)
-	
+
 	for _, key := range keys {
 		value, err := m.GetSecret(ctx, key)
 		if err != nil {
@@ -83,7 +83,7 @@ func (m *EnvManager) GetSecrets(ctx context.Context, keys []string) (map[string]
 		}
 		results[key] = value
 	}
-	
+
 	return results, nil
 }
 
@@ -93,6 +93,6 @@ func (m *EnvManager) SetSecret(ctx context.Context, key, value string) error {
 	if m.prefix != "" {
 		envKey = m.prefix + key
 	}
-	
+
 	return os.Setenv(envKey, value)
 }

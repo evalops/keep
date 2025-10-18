@@ -72,14 +72,14 @@ func New(cfg Config) *Server {
 // Start starts the MFA server
 func (s *Server) Start(ctx context.Context) error {
 	r := chi.NewRouter()
-	
+
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
 	r.Get("/health", s.healthHandler)
-	
+
 	r.Route("/mfa", func(r chi.Router) {
 		r.Post("/challenge", s.challengeHandler)
 		r.Post("/verify", s.verifyHandler)
@@ -186,7 +186,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session.Attempts++
-	
+
 	// Verify code
 	if session.Code != req.Code {
 		s.mu.Unlock()
@@ -220,7 +220,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 // statusHandler returns MFA session status
 func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
-	
+
 	s.mu.RLock()
 	session, exists := s.sessions[sessionID]
 	s.mu.RUnlock()
@@ -249,7 +249,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 		"status":          "ok",
 		"active_sessions": sessionCount,
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(health)
 }
@@ -258,12 +258,12 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) generateMFACode() (string, error) {
 	max := big.NewInt(1000000) // 6-digit max
 	min := big.NewInt(100000)  // 6-digit min
-	
+
 	n, err := rand.Int(rand.Reader, max.Sub(max, min))
 	if err != nil {
 		return "", err
 	}
-	
+
 	return fmt.Sprintf("%06d", n.Add(n, min).Int64()), nil
 }
 

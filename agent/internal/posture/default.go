@@ -26,9 +26,9 @@ func (c *DefaultCollector) CollectPosture() (*DevicePosture, error) {
 		DiskEncrypted: false,
 		ScreenLock:    false,
 	}
-	
+
 	// Calculate trust score (will be low due to unknown status)
 	posture.CalculateTrustScore()
-	
+
 	return posture, nil
 }

@@ -11,7 +11,7 @@ import (
 // TestGetCollector tests the collector factory function
 func TestGetCollector(t *testing.T) {
 	collector := GetCollector()
-	
+
 	if collector == nil {
 		t.Fatal("Expected collector, got nil")
 	}
@@ -265,7 +265,7 @@ func TestParseInt(t *testing.T) {
 // TestFileExists tests file existence utility
 func TestFileExists(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	t.Run("returns true for existing file", func(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "exists.txt")
 		os.WriteFile(testFile, []byte("test"), 0644)

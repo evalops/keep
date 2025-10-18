@@ -20,7 +20,7 @@ func main() {
 	}
 
 	server := mfa.New(cfg)
-	
+
 	log.Printf("Starting MFA service on %s", addr)
 	if err := server.Start(context.Background()); err != nil {
 		log.Fatalf("MFA service failed: %v", err)

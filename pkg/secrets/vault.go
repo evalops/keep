@@ -20,7 +20,7 @@ type VaultManager struct {
 // NewVaultManager creates a new Vault-based secret manager
 func NewVaultManager(cfg Config) (*VaultManager, error) {
 	vaultConfig := api.DefaultConfig()
-	
+
 	// Set Vault address
 	if addr := cfg.Extra["VAULT_ADDR"]; addr != "" {
 		vaultConfig.Address = addr
@@ -108,7 +108,7 @@ func authenticateKubernetes(client *api.Client, tokenFile, role string) error {
 // GetSecret retrieves a secret from Vault
 func (m *VaultManager) GetSecret(ctx context.Context, key string) (string, error) {
 	secretPath := m.buildSecretPath(key)
-	
+
 	secret, err := m.client.Logical().Read(secretPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read secret %s: %w", secretPath, err)
@@ -160,7 +160,7 @@ func (m *VaultManager) GetSecrets(ctx context.Context, keys []string) (map[strin
 // SetSecret stores a secret in Vault
 func (m *VaultManager) SetSecret(ctx context.Context, key, value string) error {
 	secretPath := m.buildSecretPath(key)
-	
+
 	data := map[string]interface{}{
 		"value": value,
 	}
@@ -185,7 +185,7 @@ func (m *VaultManager) buildSecretPath(key string) string {
 	if m.prefix == "" {
 		return key
 	}
-	
+
 	return strings.TrimSuffix(m.prefix, "/") + "/" + strings.TrimPrefix(key, "/")
 }
 

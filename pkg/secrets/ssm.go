@@ -82,7 +82,7 @@ func (m *SSMManager) GetSecrets(ctx context.Context, keys []string) (map[string]
 	// Map results back to original keys
 	results := make(map[string]string)
 	paramToKey := make(map[string]string)
-	
+
 	for i, key := range keys {
 		paramToKey[paramNames[i]] = key
 	}
@@ -133,12 +133,12 @@ func (m *SSMManager) buildParameterName(key string) string {
 	if m.prefix == "" {
 		return key
 	}
-	
+
 	// Ensure prefix starts with / and ends with /
 	prefix := strings.TrimSuffix(strings.TrimPrefix(m.prefix, "/"), "/")
 	if prefix != "" {
 		return fmt.Sprintf("/%s/%s", prefix, strings.TrimPrefix(key, "/"))
 	}
-	
+
 	return key
 }

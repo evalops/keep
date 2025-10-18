@@ -161,13 +161,13 @@ func TestLoadSigningKey(t *testing.T) {
 	t.Run("fails with non-ECDSA key", func(t *testing.T) {
 		// Create a file with an RSA key PEM structure
 		rsaKeyPath := filepath.Join(tmpDir, "rsa.key")
-		
+
 		// This is a simplified test using invalid key data to test the type checking
 		keyData := []byte(`-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB
 wHVKYdZyLkmMdVNjJqLs2Nx7e62VQqTrqTqhqY+HVhMV7HjfRqNVM6pYsf3VrGQh
 -----END PRIVATE KEY-----`)
-		
+
 		os.WriteFile(rsaKeyPath, keyData, 0600)
 
 		_, err := LoadSigningKey(rsaKeyPath)
@@ -178,12 +178,12 @@ wHVKYdZyLkmMdVNjJqLs2Nx7e62VQqTrqTqhqY+HVhMV7HjfRqNVM6pYsf3VrGQh
 
 	t.Run("fails with corrupted key data", func(t *testing.T) {
 		corruptPath := filepath.Join(tmpDir, "corrupt.key")
-		
+
 		// Write a PEM block with invalid key data
 		corruptPEM := `-----BEGIN PRIVATE KEY-----
 invalidbase64data!!!
 -----END PRIVATE KEY-----`
-		
+
 		os.WriteFile(corruptPath, []byte(corruptPEM), 0600)
 
 		_, err := LoadSigningKey(corruptPath)
@@ -382,7 +382,7 @@ c3QtY2VydDAeFw0yM...")
 
 	t.Run("overwrites existing file", func(t *testing.T) {
 		certPath := filepath.Join(tmpDir, "overwrite.crt")
-		
+
 		// Write first certificate
 		firstData := []byte("first certificate")
 		err := WriteCertificate(certPath, firstData)
