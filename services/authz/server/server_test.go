@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"tailscale.com/tsnet"
 )
 
 // TestServer_healthHandler tests the health endpoint
@@ -388,4 +390,236 @@ func createTestServerWithMocks(t *testing.T, opaURL, inventoryURL string) *Serve
 	}
 
 	return server
+}
+
+// TestServer_lookupDevice tests the device lookup functionality  
+func TestServer_lookupDevice(t *testing.T) {
+	t.Run("returns unknown posture when no inventory URL", func(t *testing.T) {
+		server := createTestServerWithMocks(t, "", "")
+		
+		result := server.lookupDevice(context.Background(), "test-device")
+		
+		expected := map[string]any{
+			"id":      "test-device",
+			"posture": "unknown",
+		}
+		
+		if result["id"] != expected["id"] || result["posture"] != expected["posture"] {
+			t.Errorf("Expected %v, got %v", expected, result)
+		}
+	})
+
+	t.Run("returns unregistered for 404 response", func(t *testing.T) {
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "not found", http.StatusNotFound)
+		}))
+		defer mockInventory.Close()
+
+		server := createTestServerWithMocks(t, "", mockInventory.URL)
+		
+		result := server.lookupDevice(context.Background(), "nonexistent-device")
+		
+		if result["posture"] != "unregistered" {
+			t.Errorf("Expected posture 'unregistered', got %v", result["posture"])
+		}
+	})
+
+	t.Run("returns device info for successful lookup", func(t *testing.T) {
+		expectedDevice := map[string]interface{}{
+			"id":      "test-device",
+			"posture": "healthy",
+		}
+
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "test-device") {
+				json.NewEncoder(w).Encode(expectedDevice)
+			} else {
+				http.Error(w, "not found", http.StatusNotFound)
+			}
+		}))
+		defer mockInventory.Close()
+
+		server := createTestServerWithMocks(t, "", mockInventory.URL)
+		
+		result := server.lookupDevice(context.Background(), "test-device")
+		
+		if result["id"] != expectedDevice["id"] || result["posture"] != expectedDevice["posture"] {
+			t.Errorf("Expected device info %v, got %v", expectedDevice, result)
+		}
+	})
+
+	t.Run("handles empty device ID", func(t *testing.T) {
+		server := createTestServerWithMocks(t, "", "http://inventory:8080")
+		
+		result := server.lookupDevice(context.Background(), "")
+		
+		if result["posture"] != "unknown" {
+			t.Errorf("Expected posture 'unknown' for empty device ID, got %v", result["posture"])
+		}
+	})
+
+	t.Run("handles inventory service errors", func(t *testing.T) {
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}))
+		defer mockInventory.Close()
+
+		server := createTestServerWithMocks(t, "", mockInventory.URL)
+		
+		result := server.lookupDevice(context.Background(), "test-device")
+		
+		if result["posture"] != "unknown" {
+			t.Errorf("Expected posture 'unknown' for service error, got %v", result["posture"])
+		}
+	})
+}
+
+// TestServer_deviceCertHandler tests the device certificate handler
+func TestServer_deviceCertHandler(t *testing.T) {
+	server := createTestServer(t)
+
+	t.Run("rejects non-POST methods", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/certs/device", nil)
+		rr := httptest.NewRecorder()
+
+		server.deviceCertHandler(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected status 405, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects invalid JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/certs/device", bytes.NewReader([]byte("invalid json")))
+		rr := httptest.NewRecorder()
+
+		server.deviceCertHandler(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects empty device ID", func(t *testing.T) {
+		reqBody := map[string]string{
+			"device_id": "",
+			"csr":       "test-csr",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/certs/device", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		server.deviceCertHandler(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects empty CSR", func(t *testing.T) {
+		reqBody := map[string]string{
+			"device_id": "test-device",
+			"csr":       "",
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/certs/device", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		server.deviceCertHandler(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", rr.Code)
+		}
+	})
+}
+
+// TestServer_caHandler tests the CA certificate handler
+func TestServer_caHandler(t *testing.T) {
+	server := createTestServer(t)
+
+	t.Run("rejects non-GET methods", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/certs/ca", nil)
+		rr := httptest.NewRecorder()
+
+		server.caHandler(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected status 405, got %d", rr.Code)
+		}
+	})
+
+	// Note: Testing successful CA retrieval would require setting up the CA
+	// which we avoid in unit tests to keep them lightweight
+}
+
+// TestServer_validateTailscaleAccess tests Tailscale network validation
+func TestServer_validateTailscaleAccess(t *testing.T) {
+	server := createTestServer(t)
+
+	t.Run("returns false when no Tailscale server", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "100.65.1.1:12345"
+
+		result := server.validateTailscaleAccess(req)
+		
+		if result != false {
+			t.Error("Expected false when no Tailscale server configured")
+		}
+	})
+
+	t.Run("returns false for non-Tailscale IP", func(t *testing.T) {
+		// Simulate having a Tailscale server (minimal setup)
+		server.tsServer = &tsnet.Server{} // Just for the nil check
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "192.168.1.1:12345" // Not in Tailscale range
+
+		result := server.validateTailscaleAccess(req)
+		
+		if result != false {
+			t.Error("Expected false for non-Tailscale IP range")
+		}
+	})
+
+	t.Run("returns true for valid Tailscale IP", func(t *testing.T) {
+		// Simulate having a Tailscale server
+		server.tsServer = &tsnet.Server{}
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "100.65.1.1:12345" // Valid Tailscale IP
+
+		result := server.validateTailscaleAccess(req)
+		
+		if result != true {
+			t.Error("Expected true for valid Tailscale IP range")
+		}
+	})
+
+	t.Run("returns false for invalid remote address", func(t *testing.T) {
+		server.tsServer = &tsnet.Server{}
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = "invalid-address"
+
+		result := server.validateTailscaleAccess(req)
+		
+		if result != false {
+			t.Error("Expected false for invalid remote address format")
+		}
+	})
+
+	t.Run("returns false for empty remote address", func(t *testing.T) {
+		server.tsServer = &tsnet.Server{}
+
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.RemoteAddr = ""
+
+		result := server.validateTailscaleAccess(req)
+		
+		if result != false {
+			t.Error("Expected false for empty remote address")
+		}
+	})
 }
