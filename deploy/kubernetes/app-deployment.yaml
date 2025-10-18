@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keep-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keep-app
+  template:
+    metadata:
+      labels:
+        app: keep-app
+    spec:
+      containers:
+        - name: keep-app
+          image: ghcr.io/example/app:latest
+          ports:
+            - containerPort: 5000

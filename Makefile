@@ -67,8 +67,11 @@ install-tools:
 	@echo "Installing Go tools..."
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
+	go install golang.org/x/vuln/cmd/govulncheck@latest
 	@echo "Installing Python tools..."
 	pip install black flake8 isort mypy
+dev-bootstrap:
+	./scripts/dev-bootstrap.sh
 
 check-tools:
 	@echo "Checking Go tools..."
