@@ -6,16 +6,27 @@ import (
 	"os"
 	"time"
 
+	"github.com/EvalOps/keep/pkg/secrets"
 	"github.com/EvalOps/keep/services/authz/server"
 )
 
 func main() {
+	// Initialize secret management
+	secretHelper := secrets.NewHelperFromEnv()
+	secretHelper.LogSecretSource()
+
+	// Load API keys and tokens from secrets
+	apiKeys := secretHelper.LoadAPIKeys()
+
+	// Load TLS configuration from secrets
+	tlsConfig := secretHelper.LoadTLSConfig("AUTHZ")
+
 	addr := getenv("AUTHZ_LISTEN_ADDR", ":8443")
 	grpcAddr := getenv("AUTHZ_GRPC_ADDR", ":8444")
-	certFile := getenv("AUTHZ_CERT_FILE", "")
-	keyFile := getenv("AUTHZ_KEY_FILE", "")
-	caFile := getenv("AUTHZ_CA_FILE", "")
-	googleClientID := getenv("GOOGLE_CLIENT_ID", "")
+	certFile := secretHelper.GetOrDefault("AUTHZ_CERT_FILE", tlsConfig["AUTHZ_TLS_CERT"])
+	keyFile := secretHelper.GetOrDefault("AUTHZ_KEY_FILE", tlsConfig["AUTHZ_TLS_KEY"])
+	caFile := secretHelper.GetOrDefault("AUTHZ_CA_FILE", tlsConfig["AUTHZ_CLIENT_CA"])
+	googleClientID := secretHelper.GetOrDefault("GOOGLE_CLIENT_ID", apiKeys["GOOGLE_CLIENT_ID"])
 
 	if googleClientID == "" {
 		log.Fatal("GOOGLE_CLIENT_ID must be set")
@@ -30,10 +41,12 @@ func main() {
 		GoogleClientID:      googleClientID,
 		OPAURL:              getenv("OPA_URL", "http://opa:8181"),
 		InventoryAPI:        getenv("INVENTORY_API", "http://inventory:8080"),
-		InventoryClientCert: getenv("AUTHZ_CLIENT_CERT", ""),
-		InventoryClientKey:  getenv("AUTHZ_CLIENT_KEY", ""),
-		InventoryCA:         getenv("AUTHZ_CA_CERT", ""),
+		InventoryClientCert: secretHelper.GetOrDefault("AUTHZ_CLIENT_CERT", tlsConfig["AUTHZ_CLIENT_CERT"]),
+		InventoryClientKey:  secretHelper.GetOrDefault("AUTHZ_CLIENT_KEY", tlsConfig["AUTHZ_CLIENT_KEY"]),
+		InventoryCA:         secretHelper.GetOrDefault("AUTHZ_CA_CERT", tlsConfig["AUTHZ_CLIENT_CA"]),
 		DeviceCertHours:     getenvDuration("DEVICE_CERT_HOURS", 4*time.Hour),
+		TailscaleAuthKey:    secretHelper.GetOrDefault("TAILSCALE_AUTH_KEY", apiKeys["TAILSCALE_AUTH_KEY"]),
+		TailscaleAPIKey:     secretHelper.GetOrDefault("TAILSCALE_API_KEY", apiKeys["TAILSCALE_API_KEY"]),
 	})
 	if err != nil {
 		log.Fatalf("failed to create authz server: %v", err)
