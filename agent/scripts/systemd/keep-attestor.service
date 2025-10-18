@@ -1,0 +1,51 @@
+[Unit]
+Description=Keep Attestor Agent
+Documentation=https://github.com/evalops/keep
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=keep-agent
+Group=keep-agent
+ExecStart=/usr/local/bin/attestor-agent \
+    --device-id=%i \
+    --inventory-url=http://localhost:8081 \
+    --authz-url=http://localhost:8443 \
+    --key=/var/lib/keep-agent/device.key \
+    --cert=/var/lib/keep-agent/device.crt \
+    --ca=/var/lib/keep-agent/ca.pem \
+    --refresh=15m \
+    --posture-interval=5m \
+    --log-level=info \
+    --pid-file=/run/keep-agent/keep-attestor.pid
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/keep-agent /run/keep-agent
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=128M
+
+# Working directory and environment
+WorkingDirectory=/var/lib/keep-agent
+Environment=HOME=/var/lib/keep-agent
+
+# PID file
+PIDFile=/run/keep-agent/keep-attestor.pid
+RuntimeDirectory=keep-agent
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
