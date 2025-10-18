@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -210,7 +209,6 @@ func TestService_initialRegistration(t *testing.T) {
 
 // TestService_updatePosture tests posture updates
 func TestService_updatePosture(t *testing.T) {
-	tmpDir := t.TempDir()
 
 	t.Run("successful posture update", func(t *testing.T) {
 		updateRequests := 0
