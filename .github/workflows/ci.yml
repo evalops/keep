@@ -1,0 +1,207 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  GO_VERSION: '1.22'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  lint-and-format:
+    name: Lint and Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Go tools
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install golang.org/x/tools/cmd/goimports@latest
+
+      - name: Install Python tools
+        run: |
+          pip install black flake8 isort mypy
+
+      - name: Check Go formatting
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -ne 0 ]; then
+            echo "Go files need formatting:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Check Python formatting
+        run: |
+          black --check app/
+          isort --check-only app/
+
+      - name: Run Go linters
+        run: golangci-lint run
+
+      - name: Run Python linters
+        run: |
+          flake8 app/
+          mypy app/ --ignore-missing-imports
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: keep
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r app/requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run Go tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+        env:
+          POSTGRES_PASSWORD: test-password
+
+      - name: Run Python tests
+        run: |
+          cd app
+          pytest tests/ -v --cov=. --cov-report=xml
+
+      - name: Upload Go coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: golang
+
+      - name: Upload Python coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./app/coverage.xml
+          flags: python
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run gosec security scanner
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: '-fmt sarif -out gosec.sarif ./...'
+
+      - name: Upload gosec results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gosec.sarif
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  build:
+    name: Build and Test Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build authz service
+        run: docker build -t keep/authz -f services/authz/Dockerfile .
+
+      - name: Build inventory service  
+        run: docker build -t keep/inventory -f services/inventory/Dockerfile .
+
+      - name: Build Flask app
+        run: docker build -t keep/app -f app/Dockerfile .
+
+      - name: Test Docker Compose build
+        run: docker compose -f docker-compose.secure.yml build
+
+      - name: Run basic smoke test
+        run: |
+          # Generate test certificates
+          ./scripts/generate-root-ca.sh ./test-certs
+          
+          # Set minimal environment
+          cat > .env << EOF
+          POSTGRES_PASSWORD=test-password
+          GOOGLE_CLIENT_ID=test-client-id.apps.googleusercontent.com
+          AUTHZ_ROOT_CA_CERT=./test-certs/keep-root.pem
+          AUTHZ_ROOT_CA_KEY=./test-certs/keep-root-key.pem
+          EOF
+          
+          # Start services briefly to test startup
+          timeout 30s docker compose -f docker-compose.secure.yml up --abort-on-container-exit || true
+
+  opa-policy-test:
+    name: Test OPA Policies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+
+      - name: Test OPA policies
+        run: opa test ./policies
+
+      - name: Validate policy syntax
+        run: opa fmt --diff ./policies/
