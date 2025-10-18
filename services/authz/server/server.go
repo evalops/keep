@@ -99,6 +99,7 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/verify", s.verifyHandler)
 			r.Post("/check", s.envoyAuthHandler)
+			r.Post("/mfa/verify-envoy", s.mfaVerifyHandler)
 		})
 		
 		r.Route("/certs", func(r chi.Router) {
@@ -730,4 +731,74 @@ func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
 		
 		metrics.RecordHTTPRequest("authz", r.Method, r.URL.Path, statusCode, duration)
 	})
+}
+
+// mfaVerifyHandler handles MFA verification from Envoy Lua filter
+func (s *Server) mfaVerifyHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sessionID := r.Header.Get("x-mfa-session")
+	code := r.Header.Get("x-mfa-code")
+
+	if sessionID == "" || code == "" {
+		http.Error(w, "missing MFA parameters", http.StatusBadRequest)
+		return
+	}
+
+	// Call MFA service to verify the code
+	verified, err := s.verifyMFACode(r.Context(), sessionID, code)
+	if err != nil {
+		log.Printf("MFA verification failed: %v", err)
+		http.Error(w, "MFA verification failed", http.StatusUnauthorized)
+		return
+	}
+
+	if !verified {
+		http.Error(w, "invalid MFA code", http.StatusUnauthorized)
+		return
+	}
+
+	// MFA verified - allow the request through
+	w.Header().Set("x-mfa-verified", "true")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("MFA verified - access granted"))
+}
+
+// verifyMFACode calls the MFA service to verify a code
+func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (bool, error) {
+	verifyData := map[string]string{
+		"session_id": sessionID,
+		"code":       code,
+	}
+
+	body, err := json.Marshal(verifyData)
+	if err != nil {
+		return false, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://mfa:8445/mfa/verify", bytes.NewReader(body))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("MFA service returned status %d", resp.StatusCode)
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return false, err
+	}
+
+	return result["status"] == "verified", nil
 }

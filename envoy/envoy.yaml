@@ -30,6 +30,75 @@ static_resources:
                             upgrade_configs:
                               - upgrade_type: websocket
                 http_filters:
+                  - name: envoy.filters.http.lua
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+                      inline_code: |
+                        function envoy_on_request(request_handle)
+                          -- Check if this is an MFA verification callback
+                          local path = request_handle:headers():get(":path")
+                          if path and string.match(path, "^/auth/mfa/callback") then
+                            -- Handle MFA callback
+                            local query_params = {}
+                            local query = string.match(path, "^[^?]*?(.*)$")
+                            if query then
+                              for key, value in string.gmatch(query, "([^&=]+)=([^&]*)") do
+                                query_params[key] = value
+                              end
+                            end
+                            
+                            if query_params.session and query_params.code then
+                              -- Add MFA verification headers
+                              request_handle:headers():add("x-mfa-session", query_params.session)
+                              request_handle:headers():add("x-mfa-code", query_params.code)
+                              request_handle:headers():replace(":path", "/auth/mfa/verify-envoy")
+                            end
+                          end
+                        end
+
+                        function envoy_on_response(response_handle)
+                          local status = response_handle:headers():get(":status")
+                          local content_type = response_handle:headers():get("content-type")
+                          
+                          -- Intercept 403 responses with JSON content (step-up required)
+                          if status == "403" and content_type and string.match(content_type, "application/json") then
+                            local body = response_handle:body()
+                            if body then
+                              local body_str = body:getBytes(0, body:length())
+                              -- Simple check for MFA required
+                              if string.match(body_str, "mfa_required") then
+                                -- Extract session ID from response (basic parsing)
+                                local session_id = string.match(body_str, '"session_id"%s*:%s*"([^"]*)"') or ""
+                                
+                                -- Create MFA challenge page
+                                local mfa_html = [[
+<!DOCTYPE html>
+<html>
+<head><title>Additional Authentication Required</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px;">
+    <h2>Additional Authentication Required</h2>
+    <p>Your device security posture requires additional verification.</p>
+    <form method="GET" action="/auth/mfa/callback">
+        <input type="hidden" name="session" value="]] .. session_id .. [[">
+        <p>Enter the 6-digit code from your authenticator:</p>
+        <input type="text" name="code" placeholder="123456" maxlength="6" required 
+               style="width: 100%; padding: 10px; font-size: 18px; text-align: center;">
+        <br><br>
+        <button type="submit" style="width: 100%; padding: 15px; background: #007cba; color: white; border: none;">
+            Verify
+        </button>
+    </form>
+</body>
+</html>]]
+                                
+                                response_handle:headers():remove("content-length")
+                                response_handle:headers():replace("content-type", "text/html")
+                                response_handle:headers():replace(":status", "200")
+                                response_handle:body():setBytes(mfa_html)
+                              end
+                            end
+                          end
+                        end
                   - name: envoy.filters.http.ext_authz
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
@@ -99,8 +168,21 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: authz
-                      port_value: 8443
+                    address: authz
+                    port_value: 8443
+    - name: mfa_cluster
+      connect_timeout: 0.5s
+      type: logical_dns
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: mfa_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: mfa
+                      port_value: 8445
 admin:
   access_log_path: /tmp/admin_access.log
   address:
