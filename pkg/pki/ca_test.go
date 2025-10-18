@@ -84,10 +84,10 @@ func TestLoadCA(t *testing.T) {
 		keyPath := filepath.Join(tmpDir, "key.pem")
 
 		// Write invalid certificate
-		if err := os.WriteFile(certPath, []byte("invalid pem"), 0644); err != nil {
+		if err := os.WriteFile(certPath, []byte("invalid pem"), 0o600); err != nil {
 			t.Fatalf("failed to write invalid certificate: %v", err)
 		}
-		if err := os.WriteFile(keyPath, []byte("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg\n-----END PRIVATE KEY-----"), 0600); err != nil {
+		if err := os.WriteFile(keyPath, []byte("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg\n-----END PRIVATE KEY-----"), 0o600); err != nil {
 			t.Fatalf("failed to write invalid key: %v", err)
 		}
 
@@ -112,7 +112,7 @@ func TestLoadCA(t *testing.T) {
 		}
 
 		// Now corrupt the key file
-		if err := os.WriteFile(keyPath, []byte("invalid key pem"), 0600); err != nil {
+		if err := os.WriteFile(keyPath, []byte("invalid key pem"), 0o600); err != nil {
 			t.Fatalf("failed to corrupt key file: %v", err)
 		}
 

@@ -347,10 +347,10 @@ func (s *Service) obtainCertificate() error {
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(s.config.CAPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(s.config.CAPath), 0o700); err != nil {
 			return err
 		}
-		if err := os.WriteFile(s.config.CAPath, rawCA, 0o644); err != nil {
+		if err := os.WriteFile(s.config.CAPath, rawCA, 0o600); err != nil {
 			return err
 		}
 	}
@@ -407,7 +407,7 @@ func (s *Service) get(endpoint string) (*http.Response, error) {
 // writePIDFile writes the process ID to a file
 func (s *Service) writePIDFile() error {
 	pid := os.Getpid()
-	return os.WriteFile(s.config.PIDFile, []byte(fmt.Sprintf("%d\n", pid)), 0o644)
+	return os.WriteFile(s.config.PIDFile, []byte(fmt.Sprintf("%d\n", pid)), 0o600)
 }
 
 // removePIDFile removes the PID file

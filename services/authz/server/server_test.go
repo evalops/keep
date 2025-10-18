@@ -72,7 +72,10 @@ func TestServer_verifyHandler(t *testing.T) {
 			DeviceID: "test-device",
 			ClientIP: "192.168.1.1",
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal verify request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/verify", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -211,7 +214,10 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 				},
 			},
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal envoy auth request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -236,7 +242,10 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 				},
 			},
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal envoy auth request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -261,7 +270,10 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 				},
 			},
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal envoy auth request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -288,7 +300,10 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 				},
 			},
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal envoy auth request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -516,7 +531,10 @@ func TestServer_deviceCertHandler(t *testing.T) {
 			"device_id": "",
 			"csr":       "test-csr",
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal device cert request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/certs/device", bytes.NewReader(body))
 		rr := httptest.NewRecorder()
@@ -533,7 +551,10 @@ func TestServer_deviceCertHandler(t *testing.T) {
 			"device_id": "test-device",
 			"csr":       "",
 		}
-		body, _ := json.Marshal(reqBody)
+		body, err := json.Marshal(reqBody)
+		if err != nil {
+			t.Fatalf("Failed to marshal device cert request: %v", err)
+		}
 
 		req := httptest.NewRequest(http.MethodPost, "/v1/certs/device", bytes.NewReader(body))
 		rr := httptest.NewRecorder()

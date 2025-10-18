@@ -11,6 +11,12 @@ import (
 	serverpkg "github.com/EvalOps/keep/services/inventory/server"
 )
 
+const (
+	flagValueTrue      = "true"
+	defaultAppEnv      = "development"
+	defaultRequireMTLS = "false"
+)
+
 func main() {
 	// Initialize secret management
 	secretHelper := secrets.NewHelperFromEnv()
@@ -31,15 +37,15 @@ func main() {
 		ClientCA:    secretHelper.GetOrDefault("INVENTORY_CLIENT_CA", tlsConfig["INVENTORY_CLIENT_CA"]),
 		AuthzJWKS:   envOrDefault("AUTHZ_JWKS_URL", ""),
 		Shutdown:    5 * time.Second,
-		RequireMTLS: envOrDefault("INVENTORY_REQUIRE_MTLS", "false") == "true",
+		RequireMTLS: envOrDefault("INVENTORY_REQUIRE_MTLS", defaultRequireMTLS) == flagValueTrue,
 	}
 
 	ctx := context.Background()
 	if err := telemetry.Init(ctx, telemetry.Config{
 		Endpoint:    os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
-		Insecure:    os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == "true",
+		Insecure:    os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == flagValueTrue,
 		ServiceName: "inventory",
-		Environment: envOrDefault("APP_ENV", "development"),
+		Environment: envOrDefault("APP_ENV", defaultAppEnv),
 	}); err != nil {
 		log.Printf("telemetry init failed: %v", err)
 	}

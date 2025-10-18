@@ -367,7 +367,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch decision {
-	case "allow":
+	case decisionAllow:
 		if deviceID != "" {
 			w.Header().Set("x-device-id", deviceID)
 		}
@@ -375,7 +375,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("x-client-subject", subject)
 		}
 		w.WriteHeader(http.StatusOK)
-	case "step-up":
+	case decisionStepUp:
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		response := map[string]interface{}{
@@ -437,7 +437,11 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
+		b, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+			return "", fmt.Errorf("opa error: failed to read body: %w", readErr)
+		}
 		telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		return "", fmt.Errorf("opa error: %s", string(b))
 	}
@@ -450,7 +454,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
 	}
-	telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), "ok")
+	telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), statusOK)
 	return out.Result.Decision, nil
 }
 
@@ -464,6 +468,17 @@ type inventoryDevice struct {
 	Posture   string `json:"posture"`
 	PublicKey string `json:"public_key"`
 }
+
+const (
+	decisionAllow        = "allow"
+	decisionStepUp       = "step-up"
+	statusOK             = "ok"
+	statusVerified       = "verified"
+	statusUnknown        = "unknown"
+	statusUnregistered   = "unregistered"
+	mfaSuccessBody       = "MFA verified - access granted"
+	defaultAuthzHostname = "keep-authz"
+)
 
 // DevicePostureData represents parsed posture information
 type DevicePostureData struct {
@@ -536,7 +551,12 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		return map[string]any{"id": deviceID, "posture": "unregistered"}
 	}
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
+		b, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+			log.Printf("inventory error %d: failed to read body: %v", resp.StatusCode, readErr)
+			return map[string]any{"id": deviceID, "posture": "unknown"}
+		}
 		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		log.Printf("inventory error %d: %s", resp.StatusCode, string(b))
 		return map[string]any{"id": deviceID, "posture": "unknown"}
@@ -564,7 +584,7 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		}
 	}
 
-	telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "ok")
+	telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), statusOK)
 	return map[string]any{
 		"id":          device.ID,
 		"posture":     postureData.Status,
@@ -692,7 +712,7 @@ func setupTailscale(cfg Config) (*tsnet.Server, net.Listener, error) {
 	}
 
 	if cfg.TailscaleHostname == "" {
-		tsServer.Hostname = "keep-authz"
+		tsServer.Hostname = defaultAuthzHostname
 	}
 
 	log.Printf("Initializing Tailscale with hostname: %s", tsServer.Hostname)
@@ -863,7 +883,9 @@ func (s *Server) mfaVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	// MFA verified - allow the request through
 	w.Header().Set("x-mfa-verified", "true")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("MFA verified - access granted"))
+	if _, err := w.Write([]byte(mfaSuccessBody)); err != nil {
+		log.Printf("failed to write MFA response: %v", err)
+	}
 }
 
 // verifyMFACode calls the MFA service to verify a code
@@ -919,11 +941,11 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 		return false, err
 	}
 
-	status := "ok"
-	if result["status"] != "verified" {
+	status := statusOK
+	if result["status"] != statusVerified {
 		status = "invalid"
 	}
 	telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), status)
 
-	return result["status"] == "verified", nil
+	return result["status"] == statusVerified, nil
 }

@@ -268,7 +268,7 @@ func TestFileExists(t *testing.T) {
 
 	t.Run("returns true for existing file", func(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "exists.txt")
-		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(testFile, []byte("test"), 0o600); err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
 

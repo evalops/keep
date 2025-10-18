@@ -16,6 +16,8 @@ import (
 	"github.com/EvalOps/keep/agent/internal/posture"
 )
 
+const testDeviceID = "test-device"
+
 // mockPostureCollector implements the posture.Collector interface for testing
 type mockPostureCollector struct {
 	postureData *posture.DevicePosture
@@ -41,7 +43,7 @@ func (e *mockError) Error() string {
 func TestService_New(t *testing.T) {
 	t.Run("creates service with valid config", func(t *testing.T) {
 		config := &Config{
-			DeviceID:        "test-device",
+			DeviceID:        testDeviceID,
 			InventoryURL:    "http://localhost:8081",
 			AttestURL:       "http://localhost:8443",
 			KeyPath:         "/tmp/test.key",
@@ -84,7 +86,7 @@ func TestService_initialRegistration(t *testing.T) {
 					return
 				}
 
-				if req.ID != "test-device" {
+				if req.ID != testDeviceID {
 					t.Errorf("Expected device ID 'test-device', got %s", req.ID)
 				}
 
@@ -97,7 +99,9 @@ func TestService_initialRegistration(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+				if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+					t.Fatalf("Failed to encode response: %v", err)
+				}
 			} else {
 				http.Error(w, "not found", http.StatusNotFound)
 			}
@@ -106,7 +110,7 @@ func TestService_initialRegistration(t *testing.T) {
 
 		// Create test config
 		config := &Config{
-			DeviceID:     "test-device",
+			DeviceID:     testDeviceID,
 			InventoryURL: mockInventory.URL,
 			AttestURL:    "http://localhost:8443",
 			KeyPath:      filepath.Join(tmpDir, "test.key"),
@@ -142,7 +146,7 @@ func TestService_initialRegistration(t *testing.T) {
 
 	t.Run("handles posture collection failure", func(t *testing.T) {
 		config := &Config{
-			DeviceID:     "test-device",
+			DeviceID:     testDeviceID,
 			InventoryURL: "http://localhost:8081",
 			KeyPath:      filepath.Join(tmpDir, "test.key"),
 		}
@@ -180,7 +184,7 @@ func TestService_initialRegistration(t *testing.T) {
 		defer mockInventory.Close()
 
 		config := &Config{
-			DeviceID:     "test-device",
+			DeviceID:     testDeviceID,
 			InventoryURL: mockInventory.URL,
 			KeyPath:      filepath.Join(tmpDir, "test.key"),
 		}
@@ -234,7 +238,9 @@ func TestService_updatePosture(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+				if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated"}); err != nil {
+					t.Fatalf("Failed to encode response: %v", err)
+				}
 			} else {
 				http.Error(w, "not found", http.StatusNotFound)
 			}
@@ -242,7 +248,7 @@ func TestService_updatePosture(t *testing.T) {
 		defer mockInventory.Close()
 
 		config := &Config{
-			DeviceID:     "test-device",
+			DeviceID:     testDeviceID,
 			InventoryURL: mockInventory.URL,
 		}
 
@@ -269,7 +275,7 @@ func TestService_updatePosture(t *testing.T) {
 
 	t.Run("handles posture collection failure", func(t *testing.T) {
 		config := &Config{
-			DeviceID:     "test-device",
+			DeviceID:     testDeviceID,
 			InventoryURL: "http://localhost:8081",
 		}
 
@@ -316,11 +322,15 @@ func TestService_obtainCertificate(t *testing.T) {
 				response := certResponse{
 					Certificate: "-----BEGIN CERTIFICATE-----\nMOCK_CERT_DATA\n-----END CERTIFICATE-----",
 				}
-				json.NewEncoder(w).Encode(response)
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Fatalf("Failed to encode certificate response: %v", err)
+				}
 			} else if r.URL.Path == "/v1/certs/ca" && r.Method == http.MethodGet {
 				// Return mock CA certificate
 				w.Header().Set("Content-Type", "application/x-pem-file")
-				w.Write([]byte("-----BEGIN CERTIFICATE-----\nMOCK_CA_DATA\n-----END CERTIFICATE-----"))
+				if _, err := w.Write([]byte("-----BEGIN CERTIFICATE-----\nMOCK_CA_DATA\n-----END CERTIFICATE-----")); err != nil {
+					t.Fatalf("Failed to write CA certificate: %v", err)
+				}
 			} else {
 				http.Error(w, "not found", http.StatusNotFound)
 			}
@@ -432,7 +442,7 @@ func TestService_removePIDFile(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "test.pid")
 
 	// Create PID file
-	err := os.WriteFile(pidFile, []byte("12345\n"), 0644)
+	err := os.WriteFile(pidFile, []byte("12345\n"), 0o600)
 	if err != nil {
 		t.Fatalf("Failed to create test PID file: %v", err)
 	}

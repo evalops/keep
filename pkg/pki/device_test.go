@@ -146,7 +146,9 @@ func TestLoadSigningKey(t *testing.T) {
 
 	t.Run("fails with invalid PEM", func(t *testing.T) {
 		invalidPEMPath := filepath.Join(tmpDir, "invalid.key")
-		os.WriteFile(invalidPEMPath, []byte("not a pem file"), 0600)
+		if err := os.WriteFile(invalidPEMPath, []byte("not a pem file"), 0o600); err != nil {
+			t.Fatalf("Failed to write invalid PEM file: %v", err)
+		}
 
 		_, err := LoadSigningKey(invalidPEMPath)
 		if err == nil {
@@ -168,7 +170,9 @@ MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB
 wHVKYdZyLkmMdVNjJqLs2Nx7e62VQqTrqTqhqY+HVhMV7HjfRqNVM6pYsf3VrGQh
 -----END PRIVATE KEY-----`)
 
-		os.WriteFile(rsaKeyPath, keyData, 0600)
+		if err := os.WriteFile(rsaKeyPath, keyData, 0o600); err != nil {
+			t.Fatalf("Failed to write RSA key: %v", err)
+		}
 
 		_, err := LoadSigningKey(rsaKeyPath)
 		if err == nil {
@@ -184,7 +188,9 @@ wHVKYdZyLkmMdVNjJqLs2Nx7e62VQqTrqTqhqY+HVhMV7HjfRqNVM6pYsf3VrGQh
 invalidbase64data!!!
 -----END PRIVATE KEY-----`
 
-		os.WriteFile(corruptPath, []byte(corruptPEM), 0600)
+		if err := os.WriteFile(corruptPath, []byte(corruptPEM), 0o600); err != nil {
+			t.Fatalf("Failed to write corrupt PEM: %v", err)
+		}
 
 		_, err := LoadSigningKey(corruptPath)
 		if err == nil {
