@@ -12,6 +12,10 @@ build:
 
 test:
 	go test ./...
+	python3 -m pytest
+
+smoke:
+	COMPOSE_FILE=docker-compose.yml ./scripts/smoke-tests.sh
 
 # Formatting targets
 format: format-go format-python
