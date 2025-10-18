@@ -21,6 +21,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/metrics"
@@ -394,11 +396,11 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 
 	start := time.Now()
 	var resp *http.Response
-	var callErr error
+	var err error
 	retryErr := retry.Do(ctx, s.retryCfg, func() error {
-		resp, callErr = s.client.Do(req)
-		if callErr != nil {
-			return callErr
+		resp, err = s.client.Do(req)
+		if err != nil {
+			return err
 		}
 		if resp.StatusCode >= 500 {
 			_ = resp.Body.Close()
@@ -488,11 +490,11 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 
 	start := time.Now()
 	var resp *http.Response
-	var callErr error
+	var err error
 	retryErr := retry.Do(ctx, s.retryCfg, func() error {
-		resp, callErr = s.invClient.Do(req)
-		if callErr != nil {
-			return callErr
+		resp, err = s.invClient.Do(req)
+		if err != nil {
+			return err
 		}
 		if resp.StatusCode >= 500 {
 			_ = resp.Body.Close()
@@ -861,11 +863,11 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 
 	start := time.Now()
 	var resp *http.Response
-	var callErr error
+	var err error
 	retryErr := retry.Do(ctx, s.retryCfg, func() error {
-		resp, callErr = s.client.Do(req)
-		if callErr != nil {
-			return callErr
+		resp, err = s.client.Do(req)
+		if err != nil {
+			return err
 		}
 		if resp.StatusCode >= 500 {
 			_ = resp.Body.Close()
