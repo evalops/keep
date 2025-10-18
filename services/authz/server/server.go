@@ -30,6 +30,7 @@ type Server struct {
 	mu        sync.Mutex
 	started   bool
 	useTLS    bool
+	rootCAPEM []byte
 }
 
 func New(cfg Config) (*Server, error) {
@@ -51,6 +52,7 @@ func New(cfg Config) (*Server, error) {
 	h.HandleFunc("/v1/auth/verify", s.verifyHandler)
 	h.HandleFunc("/v1/auth/check", s.envoyAuthHandler)
 	h.HandleFunc("/v1/certs/device", s.deviceCertHandler)
+	h.HandleFunc("/v1/certs/ca", s.caHandler)
 
 	useTLS := cfg.TLSCertPath != "" && cfg.TLSKeyPath != ""
 	if useTLS {
@@ -70,6 +72,11 @@ func New(cfg Config) (*Server, error) {
 			}
 		}
 
+		rootCAPEM, err := ca.CertificatePEM()
+		if err != nil {
+			return nil, fmt.Errorf("read ca pem: %w", err)
+		}
+
 		s.httpSrv = &http.Server{
 			Addr:    cfg.HTTPAddr,
 			Handler: h,
@@ -80,8 +87,14 @@ func New(cfg Config) (*Server, error) {
 			},
 		}
 		s.useTLS = true
+		s.rootCAPEM = rootCAPEM
 	} else {
 		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: h}
+		var err error
+		s.rootCAPEM, err = ca.CertificatePEM()
+		if err != nil {
+			return nil, fmt.Errorf("read ca pem: %w", err)
+		}
 	}
 
 	return s, nil
@@ -359,6 +372,16 @@ func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]any{"certificate": string(certPEM)})
+}
+
+func (s *Server) caHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.WriteHeader(http.StatusOK)
+	w.Write(s.rootCAPEM)
 }
 
 func decodePEMBlock(p string) ([]byte, error) {
