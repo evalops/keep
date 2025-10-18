@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -15,7 +16,6 @@ import (
 type Config struct {
 	Addr      string
 	DSN       string
-	MigDir    string
 	TLSCert   string
 	TLSKey    string
 	AuthzJWKS string
@@ -83,7 +83,7 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDevice(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/v1/devices/"):len(r.URL.Path)]
+	id := strings.TrimPrefix(r.URL.Path, "/v1/devices/")
 	if id == "" {
 		http.Error(w, "device id required", http.StatusBadRequest)
 		return

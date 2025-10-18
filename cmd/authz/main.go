@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"time"
 
