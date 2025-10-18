@@ -1,0 +1,10 @@
+services:
+  - name: bundle
+    url: http://authz:8443/policies
+bundles:
+  authz:
+    service: bundle
+    resource: policies/bundle.tar.gz
+
+decision_logs:
+  console: true

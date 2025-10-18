@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: keep
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  inventory:
+    build:
+      context: .
+      dockerfile: services/inventory/Dockerfile
+    environment:
+      INVENTORY_DSN: postgres://postgres:postgres@postgres:5432/keep?sslmode=disable
+    depends_on:
+      - postgres
+
+  opa:
+    image: openpolicyagent/opa:latest
+    command:
+      - "run"
+      - "--server"
+      - "--config-file=/policies/config.yaml"
+    volumes:
+      - ./policies:/policies
+
+  envoy:
+    build:
+      context: .
+      dockerfile: envoy/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - authz
+      - app
+
+  authz:
+    build:
+      context: .
+      dockerfile: services/authz/Dockerfile
+    environment:
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      OPA_URL: http://opa:8181
+      INVENTORY_API: http://inventory:8080
+    depends_on:
+      - opa
+      - inventory
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+
+volumes:
+  postgres-data: {}
