@@ -109,5 +109,15 @@ services:
       context: .
       dockerfile: app/Dockerfile
 
+  mfa:
+    build:
+      context: .
+      dockerfile: services/mfa/Dockerfile
+    environment:
+      MFA_LISTEN_ADDR: ":8445"
+      MFA_SESSION_TIMEOUT: "5m"
+    ports:
+      - "8445:8445"
+
 volumes:
   postgres-data: {}

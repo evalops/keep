@@ -326,8 +326,16 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusOK)
 	case "step-up":
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte("step-up required"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		response := map[string]interface{}{
+			"error":      "mfa_required",
+			"message":    "Additional authentication required",
+			"mfa_url":    fmt.Sprintf("%s/mfa/challenge", s.cfg.HTTPAddr),
+			"device_id":  deviceID,
+			"session_id": middleware.GetReqID(r.Context()),
+		}
+		json.NewEncoder(w).Encode(response)
 	default:
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}
