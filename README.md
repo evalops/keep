@@ -1,5 +1,11 @@
 # Keep: Zero-Trust PoC Stack
 
+> **⚠️ PROOF OF CONCEPT - NOT FOR PRODUCTION USE ⚠️**
+> 
+> This repository contains a proof-of-concept implementation for educational and demonstration purposes only. 
+> It is **NOT intended for production use** and may contain security vulnerabilities, incomplete features, 
+> and other issues. Use at your own risk in development/testing environments only.
+
 This repository implements an end-to-end proof of concept for a device-aware zero-trust access proxy. A user authenticates with Google SSO, Envoy enriches requests with device posture from an attestation service, and Open Policy Agent (OPA) decides whether the request is allowed, denied, or requires step-up authentication before the request reaches a protected Flask application.
 
 ## Architecture Overview
@@ -34,7 +40,6 @@ Key components:
 - Docker and Docker Compose
 - Go 1.22+
 - Python 3.12+
-- `gh` CLI logged into the EvalOps organisation (already used to create the repo)
 
 ### Configuration
 
@@ -130,4 +135,8 @@ services/inventory       # Inventory service implementation
 
 ## License
 
-This PoC is intended for internal EvalOps experimentation. Contact the security engineering team for reuse guidelines.
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+This is a proof-of-concept project for educational purposes. Contributions are welcome for learning and demonstration, but please note this is not intended for production use.
