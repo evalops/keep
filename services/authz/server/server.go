@@ -21,7 +21,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog"
 
 	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/metrics"
@@ -66,34 +65,41 @@ func New(cfg Config) (*Server, error) {
 	log.Printf("Loaded external CA certificate from %s", cfg.RootCAPath)
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	
+
 	// Configure inventory client with optional mTLS
 	invClient, err := configureInventoryClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("configure inventory client: %w", err)
 	}
 
-tsSrv, tailscaleListener, err := setupTailscale(cfg)
-if err != nil {
-	return nil, err
-}
+	tsSrv, tailscaleListener, err := setupTailscale(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("setup tailscale: %w", err)
+	}
 
-s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: tsSrv, tsListener: tailscaleListener}
-	
+	s := &Server{
+		cfg:        cfg,
+		ca:         ca,
+		client:     client,
+		invClient:  invClient,
+		tsServer:   tsSrv,
+		tsListener: tailscaleListener,
+	}
+
 	// Create chi router with middleware
 	r := chi.NewRouter()
-	
+
 	// Add middleware
 	r.Use(middleware.RequestID)
 	r.Use(s.loggingMiddleware)
-	r.Use(s.metricsMiddleware)  
+	r.Use(s.metricsMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 
 	// Health and metrics endpoints
 	r.Get("/health", s.healthHandler)
 	r.Get("/metrics", promhttp.Handler().ServeHTTP)
-	
+
 	// API routes
 	r.Route("/v1", func(r chi.Router) {
 		r.Route("/auth", func(r chi.Router) {
@@ -101,12 +107,12 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 			r.Post("/check", s.envoyAuthHandler)
 			r.Post("/mfa/verify-envoy", s.mfaVerifyHandler)
 		})
-		
+
 		r.Route("/certs", func(r chi.Router) {
 			r.Post("/device", s.deviceCertHandler)
 			r.Get("/ca", s.caHandler)
 		})
-		
+
 		r.Route("/tailscale", func(r chi.Router) {
 			r.Get("/status", s.tailscaleStatusHandler)
 		})
@@ -217,7 +223,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    "ok",
 		"tailscale": s.getTailscaleInfo(),
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(health)
@@ -497,6 +503,14 @@ func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(req.DeviceID) == "" {
+		http.Error(w, "device id required", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.CSR) == "" {
+		http.Error(w, "csr required", http.StatusBadRequest)
+		return
+	}
 
 	csrBytes, err := decodePEMBlock(req.CSR)
 	if err != nil {
@@ -629,7 +643,7 @@ func (s *Server) getTailscaleInfo() map[string]interface{} {
 		if s.cfg.TailscaleHostname == "" {
 			info["hostname"] = "keep-authz"
 		}
-		
+
 		if s.tsListener != nil {
 			info["listen_addr"] = s.tsListener.Addr().String()
 		}
@@ -688,28 +702,28 @@ func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) 
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// Create request logger
 		requestID := middleware.GetReqID(r.Context())
 		logger := logging.NewRequestLogger(r.Context(), requestID)
-		
+
 		// Add logger to context
 		ctx := logger.WithContext(r.Context())
 		r = r.WithContext(ctx)
-		
+
 		// Wrap response writer to capture status code
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-		
+
 		// Process request
 		next.ServeHTTP(ww, r)
-		
+
 		// Log request completion
 		duration := time.Since(start)
 		clientIP := r.Header.Get("X-Forwarded-For")
 		if clientIP == "" {
 			clientIP = r.RemoteAddr
 		}
-		
+
 		logging.LogRequest(logger, r.Method, r.URL.Path, r.UserAgent(), clientIP, duration, ww.Status())
 	})
 }
@@ -718,17 +732,17 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// Wrap response writer to capture status code
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-		
+
 		// Process request
 		next.ServeHTTP(ww, r)
-		
+
 		// Record metrics
 		duration := time.Since(start)
 		statusCode := fmt.Sprintf("%d", ww.Status())
-		
+
 		metrics.RecordHTTPRequest("authz", r.Method, r.URL.Path, statusCode, duration)
 	})
 }
@@ -779,7 +793,12 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 		return false, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://mfa:8445/mfa/verify", bytes.NewReader(body))
+	endpoint := strings.TrimSuffix(s.cfg.MFAServiceURL, "/")
+	if endpoint == "" {
+		endpoint = "http://mfa:8445"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/mfa/verify", bytes.NewReader(body))
 	if err != nil {
 		return false, err
 	}

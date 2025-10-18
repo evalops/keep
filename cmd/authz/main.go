@@ -47,6 +47,7 @@ func main() {
 		DeviceCertHours:     getenvDuration("DEVICE_CERT_HOURS", 4*time.Hour),
 		TailscaleAuthKey:    secretHelper.GetOrDefault("TAILSCALE_AUTH_KEY", apiKeys["TAILSCALE_AUTH_KEY"]),
 		TailscaleAPIKey:     secretHelper.GetOrDefault("TAILSCALE_API_KEY", apiKeys["TAILSCALE_API_KEY"]),
+		MFAServiceURL:       getenv("MFA_SERVICE_URL", ""),
 	})
 	if err != nil {
 		log.Fatalf("failed to create authz server: %v", err)
