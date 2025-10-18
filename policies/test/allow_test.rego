@@ -1,5 +1,7 @@
 package keep_test
 
+import future.keywords.if
+
 test_allow_healthy_device if {
 	input := {
 		"user": {"email": "alice@example.com"},

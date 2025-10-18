@@ -1,5 +1,7 @@
 package keep
 
+import future.keywords.if
+
 default decision := "deny"
 
 decision := "allow" if {
@@ -27,9 +29,7 @@ decision := "deny" if {
 	input.device.posture == "unregistered"
 }
 
-allow if {
-	decision == "allow"
-}
+allow if decision == "allow"
 
 valid_user if {
 	input.user.email != ""
