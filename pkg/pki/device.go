@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,7 +26,12 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o700); err != nil {
 		return nil, err
 	}
 
@@ -34,7 +40,13 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultKeyPerm)
+	root, fileName, err := openFileRoot(absPath)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	file, err := root.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultKeyPerm)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +61,24 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 
 // LoadSigningKey reads an ECDSA private key from disk (PKCS8 PEM).
 func LoadSigningKey(path string) (*ecdsa.PrivateKey, error) {
-	data, err := os.ReadFile(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	root, fileName, err := openFileRoot(absPath)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	file, err := root.Open(fileName)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
@@ -101,10 +130,41 @@ func CreateCSR(priv *ecdsa.PrivateKey, deviceID string) ([]byte, error) {
 
 // WriteCertificate writes PEM certificate data to disk with secure permissions.
 func WriteCertificate(path string, pemData []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, pemData, defaultCertPerm)
+
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		return err
+	}
+
+	root, fileName, err := openFileRoot(absPath)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	file, err := root.OpenFile(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultCertPerm)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.Write(pemData)
+	return err
+}
+
+func openFileRoot(fullPath string) (*os.Root, string, error) {
+	dir := filepath.Dir(fullPath)
+	name := filepath.Base(fullPath)
+
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return root, name, nil
 }
 
 // CertificateExpiry parses PEM certificate data and returns the NotAfter timestamp.

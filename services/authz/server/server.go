@@ -169,6 +169,7 @@ func New(cfg Config) (*Server, error) {
 				Certificates: []tls.Certificate{cert},
 				ClientAuth:   tls.NoClientCert,
 				ClientCAs:    clientCAs,
+				MinVersion:   tls.VersionTLS13,
 			},
 		}
 		s.useTLS = true
