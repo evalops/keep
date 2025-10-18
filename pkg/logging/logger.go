@@ -8,13 +8,14 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Initialize sets up global logging configuration
 func Initialize(service, level string) {
 	// Configure time format
 	zerolog.TimeFieldFormat = time.RFC3339Nano
-	
+
 	// Set global log level
 	switch strings.ToLower(level) {
 	case "debug":
@@ -52,12 +53,12 @@ func NewServiceLogger(component string) zerolog.Logger {
 // NewRequestLogger creates a logger for a specific request with tracing info
 func NewRequestLogger(ctx context.Context, requestID string) zerolog.Logger {
 	logger := log.Logger.With().Str("request_id", requestID).Logger()
-	
+
 	// Add trace ID if available from OpenTelemetry
 	if traceID := getTraceID(ctx); traceID != "" {
 		logger = logger.With().Str("trace_id", traceID).Logger()
 	}
-	
+
 	return logger
 }
 
@@ -130,7 +131,9 @@ func getVersion() string {
 
 // getTraceID extracts trace ID from context (placeholder for OpenTelemetry integration)
 func getTraceID(ctx context.Context) string {
-	// This would be implemented with OpenTelemetry trace.SpanFromContext
-	// For now, return empty string
-	return ""
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().IsValid() {
+		return ""
+	}
+	return span.SpanContext().TraceID().String()
 }

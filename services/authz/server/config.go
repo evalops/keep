@@ -21,4 +21,10 @@ type Config struct {
 	TailscaleAPIKey     string
 	TailscaleTailnet    string
 	MFAServiceURL       string
+	TelemetryEndpoint   string
+	TelemetryInsecure   bool
+	TelemetryEnv        string
+	RequestTimeout      time.Duration
+	RetryMaxAttempts    int
+	RetryMaxElapsed     time.Duration
 }

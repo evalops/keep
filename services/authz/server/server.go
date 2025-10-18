@@ -21,10 +21,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/metrics"
 	"github.com/EvalOps/keep/pkg/pki"
+	"github.com/EvalOps/keep/pkg/retry"
+	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/EvalOps/keep/services/authz/token"
 	"tailscale.com/tsnet"
 )
@@ -42,9 +46,20 @@ type Server struct {
 	tsServer   *tsnet.Server
 	tsListener net.Listener
 	tsHTTP     *http.Server
+	retryCfg   retry.Config
 }
 
 func New(cfg Config) (*Server, error) {
+	ctx := context.Background()
+	if err := telemetry.Init(ctx, telemetry.Config{
+		Endpoint:    cfg.TelemetryEndpoint,
+		Insecure:    cfg.TelemetryInsecure,
+		ServiceName: "authz",
+		Environment: cfg.TelemetryEnv,
+	}); err != nil {
+		log.Printf("telemetry init failed: %v", err)
+	}
+
 	if cfg.GoogleClientID == "" {
 		return nil, errors.New("Google client ID is required")
 	}
@@ -64,7 +79,13 @@ func New(cfg Config) (*Server, error) {
 
 	log.Printf("Loaded external CA certificate from %s", cfg.RootCAPath)
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := telemetry.WrapClient(&http.Client{Timeout: 5 * time.Second})
+	retryCfg := retry.Config{
+		MaxElapsedTime: cfg.RetryMaxElapsed,
+		InitialInterval: 200 * time.Millisecond,
+		Multiplier:      1.5,
+		MaxInterval:     2 * time.Second,
+	}
 
 	// Configure inventory client with optional mTLS
 	invClient, err := configureInventoryClient(cfg)
@@ -84,10 +105,12 @@ func New(cfg Config) (*Server, error) {
 		invClient:  invClient,
 		tsServer:   tsSrv,
 		tsListener: tailscaleListener,
+		retryCfg:  retryCfg,
 	}
 
 	// Create chi router with middleware
 	r := chi.NewRouter()
+	telemetry.InstrumentRouter(r, "authz")
 
 	// Add middleware
 	r.Use(middleware.RequestID)
@@ -371,14 +394,29 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", err
+	start := time.Now()
+   var resp *http.Response
+   var err error
+   retryErr := retry.Do(ctx, s.retryCfg, func() error {
+       resp, err = s.client.Do(req)
+       if err != nil {
+           return err
+       }
+       if resp.StatusCode >= 500 {
+           _ = resp.Body.Close()
+           return fmt.Errorf("opa temporary error: %d", resp.StatusCode)
+       }
+       return nil
+   })
+	if retryErr != nil {
+		telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), "error")
+		return "", retryErr
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
+		telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		return "", fmt.Errorf("opa error: %s", string(b))
 	}
 
@@ -390,6 +428,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
 	}
+	telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), "ok")
 	return out.Result.Decision, nil
 }
 
@@ -449,24 +488,41 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		return map[string]any{"id": deviceID, "posture": "unknown"}
 	}
 
-	resp, err := s.invClient.Do(req)
-	if err != nil {
-		log.Printf("inventory request failed: %v", err)
+	start := time.Now()
+   var resp *http.Response
+   var err error
+   retryErr := retry.Do(ctx, s.retryCfg, func() error {
+       resp, err = s.invClient.Do(req)
+       if err != nil {
+           return err
+       }
+       if resp.StatusCode >= 500 {
+           _ = resp.Body.Close()
+           return fmt.Errorf("inventory temporary error: %d", resp.StatusCode)
+       }
+       return nil
+   })
+	if retryErr != nil {
+		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "error")
+		log.Printf("inventory request failed: %v", retryErr)
 		return map[string]any{"id": deviceID, "posture": "unknown"}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
+		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "404")
 		return map[string]any{"id": deviceID, "posture": "unregistered"}
 	}
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
+		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		log.Printf("inventory error %d: %s", resp.StatusCode, string(b))
 		return map[string]any{"id": deviceID, "posture": "unknown"}
 	}
 
 	var device inventoryDevice
 	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
+		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "decode_error")
 		log.Printf("inventory decode failed: %v", err)
 		return map[string]any{"id": deviceID, "posture": "unknown"}
 	}
@@ -486,6 +542,7 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		}
 	}
 
+	telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "ok")
 	return map[string]any{
 		"id":          device.ID,
 		"posture":     postureData.Status,
@@ -587,10 +644,10 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 		log.Printf("Configured custom CA for inventory service validation")
 	}
 
-	return &http.Client{
+	return telemetry.WrapClient(&http.Client{
 		Timeout:   3 * time.Second,
 		Transport: transport,
-	}, nil
+	}), nil
 }
 
 // setupTailscale configures and initializes the Tailscale tsnet server
@@ -804,13 +861,28 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return false, err
+	start := time.Now()
+    var resp *http.Response
+    var err error
+    retryErr := retry.Do(ctx, s.retryCfg, func() error {
+        resp, err = s.client.Do(req)
+        if err != nil {
+            return err
+        }
+        if resp.StatusCode >= 500 {
+            _ = resp.Body.Close()
+            return fmt.Errorf("mfa temporary error: %d", resp.StatusCode)
+        }
+        return nil
+    })
+	if retryErr != nil {
+		telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), "error")
+		return false, retryErr
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		return false, fmt.Errorf("MFA service returned status %d", resp.StatusCode)
 	}
 
@@ -818,6 +890,12 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return false, err
 	}
+
+	status := "ok"
+	if result["status"] != "verified" {
+		status = "invalid"
+	}
+	telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), status)
 
 	return result["status"] == "verified", nil
 }

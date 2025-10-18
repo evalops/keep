@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/EvalOps/keep/pkg/secrets"
@@ -48,6 +49,12 @@ func main() {
 		TailscaleAuthKey:    secretHelper.GetOrDefault("TAILSCALE_AUTH_KEY", apiKeys["TAILSCALE_AUTH_KEY"]),
 		TailscaleAPIKey:     secretHelper.GetOrDefault("TAILSCALE_API_KEY", apiKeys["TAILSCALE_API_KEY"]),
 		MFAServiceURL:       getenv("MFA_SERVICE_URL", ""),
+		TelemetryEndpoint:   getenv("TELEMETRY_ENDPOINT", ""),
+		TelemetryInsecure:   getenv("TELEMETRY_INSECURE", "") == "1",
+		TelemetryEnv:        getenv("ENVIRONMENT", "development"),
+		RequestTimeout:      getenvDuration("AUTHZ_REQUEST_TIMEOUT", 3*time.Second),
+		RetryMaxAttempts:    getenvInt("AUTHZ_RETRY_ATTEMPTS", 3),
+		RetryMaxElapsed:     getenvDuration("AUTHZ_RETRY_MAX_ELAPSED", 10*time.Second),
 	})
 	if err != nil {
 		log.Fatalf("failed to create authz server: %v", err)
@@ -70,6 +77,16 @@ func getenvDuration(key string, def time.Duration) time.Duration {
 		d, err := time.ParseDuration(v)
 		if err == nil {
 			return d
+		}
+	}
+	return def
+}
+
+func getenvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		i, err := strconv.Atoi(v)
+		if err == nil {
+			return i
 		}
 	}
 	return def
