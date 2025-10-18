@@ -40,6 +40,10 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, err
 	}
 
+	if err := ensureSchema(db); err != nil {
+		return nil, err
+	}
+
 	s := &Server{cfg: cfg, db: db}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.health)
@@ -104,6 +108,18 @@ type Device struct {
 	Posture     string    `json:"posture"`
 	Registered  time.Time `json:"registered_at"`
 	LastUpdated time.Time `json:"last_updated"`
+}
+
+func ensureSchema(db *sql.DB) error {
+	_, err := db.Exec(`
+	CREATE TABLE IF NOT EXISTS devices (
+		id TEXT PRIMARY KEY,
+		public_key TEXT NOT NULL,
+		posture TEXT NOT NULL DEFAULT 'healthy',
+		registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
+	)`)
+	return err
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
