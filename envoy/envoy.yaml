@@ -11,6 +11,12 @@ static_resources:
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: ingress_http
+                forward_client_cert_details: sanitize_set
+                set_current_client_cert_details:
+                  subject: true
+                  cert: true
+                  dns: true
+                  uri: true
                 route_config:
                   name: local_route
                   virtual_hosts:
@@ -28,16 +34,32 @@ static_resources:
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
                       transport_api_version: V3
-                      with_request_body:
-                        max_request_bytes: 8192
-                        allow_partial_message: false
-                      grpc_service:
-                        envoy_grpc:
-                          cluster_name: authz_ext
-                        timeout: 0.5s
                       failure_mode_allow: false
                       include_peer_certificate: true
-                      metadata_context_namespaces: ["envoy.filters.http.ext_authz"]
+                      http_service:
+                        server_uri:
+                          uri: http://authz:8443
+                          cluster: authz_http
+                          timeout: 0.5s
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: authorization
+                              - exact: x-device-id
+                              - exact: x-forwarded-for
+                              - exact: x-forwarded-proto
+                              - exact: x-request-id
+                              - exact: x-forwarded-client-cert
+                              - exact: x-envoy-external-address
+                              - exact: x-real-ip
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: x-device-id
+                              - exact: x-client-subject
+                          allowed_client_headers:
+                            patterns:
+                              - exact: authorization
                   - name: envoy.filters.http.router
   clusters:
     - name: flask_service
@@ -66,20 +88,6 @@ static_resources:
             validation_context:
               trusted_ca:
                 filename: /etc/envoy/certs/ca.pem
-    - name: authz_ext
-      connect_timeout: 0.5s
-      type: logical_dns
-      lb_policy: ROUND_ROBIN
-      http2_protocol_options: {}
-      load_assignment:
-        cluster_name: authz_ext
-        endpoints:
-          - lb_endpoints:
-              - endpoint:
-                  address:
-                    socket_address:
-                      address: authz
-                      port_value: 8444
     - name: authz_http
       connect_timeout: 0.5s
       type: logical_dns

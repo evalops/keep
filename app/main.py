@@ -11,6 +11,8 @@ def health():
 @app.route("/")
 def index():
     cert_subject = request.headers.get("X-Client-Subject", "unknown")
+    if cert_subject.startswith("Subject="):
+        cert_subject = cert_subject.replace("Subject=", "", 1)
     device_id = request.headers.get("X-Device-ID", "unknown")
     return (
         f"Hello from keep protected app!\n"

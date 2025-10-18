@@ -195,7 +195,10 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 	deviceID := headers["x-device-id"]
 	clientIP := headers["x-forwarded-for"]
 	if clientIP == "" {
-		clientIP = headers[":authority"]
+		clientIP = headers["x-envoy-external-address"]
+	}
+	if clientIP == "" {
+		clientIP = headers["x-real-ip"]
 	}
 
 	if authHeader == "" {
@@ -225,6 +228,12 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch decision {
 	case "allow":
+		if deviceID != "" {
+			w.Header().Set("x-device-id", deviceID)
+		}
+		if subj := headers["x-forwarded-client-cert"]; subj != "" {
+			w.Header().Set("x-client-subject", subj)
+		}
 		w.WriteHeader(http.StatusOK)
 	case "step-up":
 		w.WriteHeader(http.StatusUnauthorized)

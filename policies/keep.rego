@@ -2,8 +2,6 @@ package keep
 
 default decision := "deny"
 
-allow := decision == "allow"
-
 decision := "allow" {
 	valid_user
 	valid_device
@@ -12,6 +10,10 @@ decision := "allow" {
 decision := "step-up" {
 	valid_user
 	input.device.posture == "quarantined"
+}
+
+allow {
+	decision == "allow"
 }
 
 valid_user {
