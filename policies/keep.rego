@@ -2,41 +2,36 @@ package keep
 
 default decision := "deny"
 
-# High trust score - allow access
-decision := "allow" {
+decision := "allow" if {
 	valid_user
 	input.device.trust_score >= 80
 }
 
-# Medium trust score - require step-up authentication  
-decision := "step-up" {
+decision := "step-up" if {
 	valid_user
 	input.device.trust_score >= 50
 	input.device.trust_score < 80
 }
 
-# Low trust score - deny access
-decision := "deny" {
+decision := "deny" if {
 	input.device.trust_score < 50
 }
 
-# Special case: unknown or unregistered devices
-decision := "deny" {
+decision := "deny" if {
 	valid_user
 	input.device.posture == "unknown"
 }
 
-decision := "deny" {
+decision := "deny" if {
 	valid_user
 	input.device.posture == "unregistered"
 }
 
-# Backward compatibility
-allow {
+allow if {
 	decision == "allow"
 }
 
-valid_user {
+valid_user if {
 	input.user.email != ""
 	input.user.email != null
 }

@@ -1,8 +1,6 @@
 package keep_test
 
-import future.keywords
-
-test_allow_healthy_device {
+test_allow_healthy_device if {
 	input := {
 		"user": {"email": "alice@example.com"},
 		"device": {"posture": "healthy"},
@@ -12,7 +10,7 @@ test_allow_healthy_device {
 	result == "allow"
 }
 
-test_step_up_quarantined {
+test_step_up_quarantined if {
 	input := {
 		"user": {"email": "alice@example.com"},
 		"device": {"posture": "quarantined"},
@@ -21,7 +19,7 @@ test_step_up_quarantined {
 	result == "step-up"
 }
 
-test_deny_missing_user {
+test_deny_missing_user if {
 	input := {
 		"user": {"email": ""},
 		"device": {"posture": "healthy"},
