@@ -18,10 +18,12 @@ _logger = logging.getLogger(__name__)
 
 
 def _resource(service_name: str, environment: str) -> Resource:
-    return Resource.create({
-        "service.name": service_name,
-        "deployment.environment": environment,
-    })
+    return Resource.create(
+        {
+            "service.name": service_name,
+            "deployment.environment": environment,
+        }
+    )
 
 
 def init_tracing(service_name: str, environment: str, endpoint: str, insecure: bool) -> None:
