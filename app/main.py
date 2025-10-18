@@ -6,7 +6,6 @@ from flask import Flask, jsonify, request
 
 from app.telemetry import setup as telemetry_setup
 
-
 app = Flask(__name__)
 telemetry_setup(app, service_name="keep-app")
 
