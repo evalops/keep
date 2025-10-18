@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -42,6 +44,7 @@ type Service struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	logger     *log.Logger
+	httpClient *http.Client
 }
 
 // registerRequest represents device registration payload
@@ -69,11 +72,12 @@ func New(config *Config) *Service {
 	logger := log.New(os.Stdout, "[AttestorAgent] ", log.LstdFlags|log.Lshortfile)
 
 	return &Service{
-		config:    config,
-		collector: posture.GetCollector(),
-		ctx:       ctx,
-		cancel:    cancel,
-		logger:    logger,
+		config:     config,
+		collector:  posture.GetCollector(),
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		ctx:        ctx,
+		cancel:     cancel,
+		logger:     logger,
 	}
 }
 
@@ -255,8 +259,11 @@ func (s *Service) updatePosture() error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/v1/devices/%s/posture", strings.TrimSuffix(s.config.InventoryURL, "/"), s.config.DeviceID)
-	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.InventoryURL, "/"), "v1", "devices", s.config.DeviceID, "posture")
+	if err != nil {
+		return fmt.Errorf("build posture endpoint: %w", err)
+	}
+	resp, err := s.postJSON(endpoint, body)
 	if err != nil {
 		return err
 	}
@@ -277,8 +284,11 @@ func (s *Service) registerDevice(publicKey, posture string) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/v1/devices", strings.TrimSuffix(s.config.InventoryURL, "/"))
-	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.InventoryURL, "/"), "v1", "devices")
+	if err != nil {
+		return fmt.Errorf("build registration endpoint: %w", err)
+	}
+	resp, err := s.postJSON(endpoint, body)
 	if err != nil {
 		return err
 	}
@@ -308,8 +318,11 @@ func (s *Service) obtainCertificate() error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/v1/certs/device", strings.TrimSuffix(s.config.AttestURL, "/"))
-	resp, err := http.Post(url, "application/json", strings.NewReader(string(body)))
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, "/"), "v1", "certs", "device")
+	if err != nil {
+		return fmt.Errorf("build certificate endpoint: %w", err)
+	}
+	resp, err := s.postJSON(endpoint, body)
 	if err != nil {
 		return err
 	}
@@ -347,8 +360,11 @@ func (s *Service) obtainCertificate() error {
 
 // downloadCA downloads the root CA certificate
 func (s *Service) downloadCA() ([]byte, error) {
-	url := fmt.Sprintf("%s/v1/certs/ca", strings.TrimSuffix(s.config.AttestURL, "/"))
-	resp, err := http.Get(url)
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, "/"), "v1", "certs", "ca")
+	if err != nil {
+		return nil, fmt.Errorf("build CA endpoint: %w", err)
+	}
+	resp, err := s.get(endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -358,6 +374,34 @@ func (s *Service) downloadCA() ([]byte, error) {
 		return nil, fmt.Errorf("ca download failed: %s", resp.Status)
 	}
 	return io.ReadAll(resp.Body)
+}
+
+func (s *Service) httpClientOrDefault() *http.Client {
+	if s.httpClient != nil {
+		return s.httpClient
+	}
+	return &http.Client{Timeout: 10 * time.Second}
+}
+
+func (s *Service) postJSON(endpoint string, payload []byte) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.httpClientOrDefault().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (s *Service) get(endpoint string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	return s.httpClientOrDefault().Do(req)
 }
 
 // writePIDFile writes the process ID to a file
