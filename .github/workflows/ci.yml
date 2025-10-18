@@ -69,15 +69,23 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: test-password
-          POSTGRES_DB: keep
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app_test
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready -U postgres -d app_test"
+          --health-interval=2s
+          --health-timeout=2s
+          --health-retries=20
         ports:
           - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/app_test
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGDATABASE: app_test
 
     steps:
       - name: Checkout code
@@ -101,10 +109,19 @@ jobs:
           pip install -r app/requirements.txt
           pip install pytest pytest-cov
 
+      - name: Wait for database
+        run: |
+          for i in {1..30}; do
+            pg_isready -h 127.0.0.1 -p 5432 -U postgres -d app_test && exit 0
+            sleep 1
+          done
+          echo "Postgres did not become ready" >&2
+          exit 1
+
       - name: Run Go tests
         run: go test -v -race -coverprofile=coverage.out ./...
         env:
-          POSTGRES_PASSWORD: test-password
+          POSTGRES_PASSWORD: postgres
 
       - name: Run Python tests
         run: |
