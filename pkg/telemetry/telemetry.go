@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 )
@@ -57,6 +58,7 @@ func Init(ctx context.Context, cfg Config) error {
 		)
 
 		otel.SetTracerProvider(provider)
+		otel.SetTextMapPropagator(propagation.TraceContext{})
 		shutdownFn = provider.Shutdown
 	})
 

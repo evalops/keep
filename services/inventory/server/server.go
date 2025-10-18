@@ -16,17 +16,19 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"github.com/EvalOps/keep/pkg/telemetry"
 )
 
 type Config struct {
-	Addr       string
-	DSN        string
-	TLSCert    string
-	TLSKey     string
-	ClientCA   string        // CA certificate for client authentication
-	AuthzJWKS  string
-	Shutdown   time.Duration
-	RequireMTLS bool         // Whether to require client certificates
+	Addr        string
+	DSN         string
+	TLSCert     string
+	TLSKey      string
+	ClientCA    string // CA certificate for client authentication
+	AuthzJWKS   string
+	Shutdown    time.Duration
+	RequireMTLS bool // Whether to require client certificates
 }
 
 type Server struct {
@@ -51,10 +53,11 @@ func NewServer(cfg Config) (*Server, error) {
 	// go run ./cmd/migrate -direction=up
 
 	s := &Server{cfg: cfg, db: db}
-	
+
 	// Create chi router with middleware
 	r := chi.NewRouter()
-	
+	telemetry.InstrumentRouter(r, "inventory")
+
 	// Add middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
@@ -63,13 +66,13 @@ func NewServer(cfg Config) (*Server, error) {
 
 	// Health endpoint (no auth required)
 	r.Get("/health", s.health)
-	
+
 	// API routes with optional mTLS authentication
 	r.Route("/v1", func(r chi.Router) {
 		if cfg.ClientCA != "" {
 			r.Use(s.requireClientCertMiddleware)
 		}
-		
+
 		r.Route("/devices", func(r chi.Router) {
 			r.Get("/", s.listDevices)
 			r.Post("/", s.registerDevice)
@@ -96,7 +99,7 @@ func (s *Server) Start(ctx context.Context) error {
 				log.Printf("TLS configuration failed: %v", configErr)
 				return
 			}
-			
+
 			s.http.TLSConfig = tlsConfig
 			log.Printf("Starting inventory service with TLS on %s", s.cfg.Addr)
 			if s.cfg.RequireMTLS {
@@ -107,7 +110,7 @@ func (s *Server) Start(ctx context.Context) error {
 			log.Printf("Starting inventory service without TLS on %s", s.cfg.Addr)
 			err = s.http.ListenAndServe()
 		}
-		
+
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("inventory listen error: %v", err)
 		}
@@ -172,7 +175,7 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 		} else {
 			// Log client certificate info for audit purposes
 			cert := r.TLS.PeerCertificates[0]
-			log.Printf("Authenticated request from client: %s (issued by: %s)", 
+			log.Printf("Authenticated request from client: %s (issued by: %s)",
 				cert.Subject.CommonName, cert.Issuer.CommonName)
 		}
 

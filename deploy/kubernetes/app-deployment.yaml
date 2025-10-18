@@ -15,5 +15,32 @@ spec:
       containers:
         - name: keep-app
           image: ghcr.io/example/app:latest
+          env:
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: keep-config
+                  key: APP_ENV
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4318"
           ports:
             - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"

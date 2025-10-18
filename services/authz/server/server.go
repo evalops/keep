@@ -81,7 +81,7 @@ func New(cfg Config) (*Server, error) {
 
 	client := telemetry.WrapClient(&http.Client{Timeout: 5 * time.Second})
 	retryCfg := retry.Config{
-		MaxElapsedTime: cfg.RetryMaxElapsed,
+		MaxElapsedTime:  cfg.RetryMaxElapsed,
 		InitialInterval: 200 * time.Millisecond,
 		Multiplier:      1.5,
 		MaxInterval:     2 * time.Second,
@@ -105,7 +105,7 @@ func New(cfg Config) (*Server, error) {
 		invClient:  invClient,
 		tsServer:   tsSrv,
 		tsListener: tailscaleListener,
-		retryCfg:  retryCfg,
+		retryCfg:   retryCfg,
 	}
 
 	// Create chi router with middleware
@@ -395,19 +395,19 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	req.Header.Set("Content-Type", "application/json")
 
 	start := time.Now()
-   var resp *http.Response
-   var err error
-   retryErr := retry.Do(ctx, s.retryCfg, func() error {
-       resp, err = s.client.Do(req)
-       if err != nil {
-           return err
-       }
-       if resp.StatusCode >= 500 {
-           _ = resp.Body.Close()
-           return fmt.Errorf("opa temporary error: %d", resp.StatusCode)
-       }
-       return nil
-   })
+	var resp *http.Response
+	var err error
+	retryErr := retry.Do(ctx, s.retryCfg, func() error {
+		resp, err = s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode >= 500 {
+			_ = resp.Body.Close()
+			return fmt.Errorf("opa temporary error: %d", resp.StatusCode)
+		}
+		return nil
+	})
 	if retryErr != nil {
 		telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), "error")
 		return "", retryErr
@@ -489,19 +489,19 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 	}
 
 	start := time.Now()
-   var resp *http.Response
-   var err error
-   retryErr := retry.Do(ctx, s.retryCfg, func() error {
-       resp, err = s.invClient.Do(req)
-       if err != nil {
-           return err
-       }
-       if resp.StatusCode >= 500 {
-           _ = resp.Body.Close()
-           return fmt.Errorf("inventory temporary error: %d", resp.StatusCode)
-       }
-       return nil
-   })
+	var resp *http.Response
+	var err error
+	retryErr := retry.Do(ctx, s.retryCfg, func() error {
+		resp, err = s.invClient.Do(req)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode >= 500 {
+			_ = resp.Body.Close()
+			return fmt.Errorf("inventory temporary error: %d", resp.StatusCode)
+		}
+		return nil
+	})
 	if retryErr != nil {
 		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "error")
 		log.Printf("inventory request failed: %v", retryErr)
@@ -862,19 +862,19 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	req.Header.Set("Content-Type", "application/json")
 
 	start := time.Now()
-    var resp *http.Response
-    var err error
-    retryErr := retry.Do(ctx, s.retryCfg, func() error {
-        resp, err = s.client.Do(req)
-        if err != nil {
-            return err
-        }
-        if resp.StatusCode >= 500 {
-            _ = resp.Body.Close()
-            return fmt.Errorf("mfa temporary error: %d", resp.StatusCode)
-        }
-        return nil
-    })
+	var resp *http.Response
+	var err error
+	retryErr := retry.Do(ctx, s.retryCfg, func() error {
+		resp, err = s.client.Do(req)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode >= 500 {
+			_ = resp.Body.Close()
+			return fmt.Errorf("mfa temporary error: %d", resp.StatusCode)
+		}
+		return nil
+	})
 	if retryErr != nil {
 		telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), "error")
 		return false, retryErr

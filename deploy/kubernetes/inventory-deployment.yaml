@@ -15,5 +15,32 @@ spec:
       containers:
         - name: inventory
           image: ghcr.io/example/inventory:latest
+          env:
+            - name: INVENTORY_ADDR
+              value: ":8080"
+            - name: APP_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: keep-config
+                  key: APP_ENV
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
           ports:
             - containerPort: 8080

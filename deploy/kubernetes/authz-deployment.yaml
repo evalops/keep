@@ -15,5 +15,42 @@ spec:
       containers:
         - name: authz
           image: ghcr.io/example/authz:latest
+          env:
+            - name: OPA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: keep-config
+                  key: OPA_URL
+            - name: INVENTORY_API
+              valueFrom:
+                configMapKeyRef:
+                  name: keep-config
+                  key: INVENTORY_API
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: keep-secrets
+                  key: google_client_id
           ports:
             - containerPort: 8443
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            scheme: HTTPS
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8443
+            scheme: HTTPS
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "128Mi"
+            limits:
+              cpu: "400m"
+              memory: "256Mi"

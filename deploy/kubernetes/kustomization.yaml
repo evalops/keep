@@ -2,3 +2,5 @@ resources:
   - authz-deployment.yaml
   - inventory-deployment.yaml
   - app-deployment.yaml
+  - configmap.yaml
+  - secret.yaml

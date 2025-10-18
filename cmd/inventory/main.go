@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/EvalOps/keep/pkg/secrets"
+	"github.com/EvalOps/keep/pkg/telemetry"
 	serverpkg "github.com/EvalOps/keep/services/inventory/server"
 )
 
@@ -33,12 +34,22 @@ func main() {
 		RequireMTLS: envOrDefault("INVENTORY_REQUIRE_MTLS", "false") == "true",
 	}
 
+	ctx := context.Background()
+	if err := telemetry.Init(ctx, telemetry.Config{
+		Endpoint:    os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		Insecure:    os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == "true",
+		ServiceName: "inventory",
+		Environment: envOrDefault("APP_ENV", "development"),
+	}); err != nil {
+		log.Printf("telemetry init failed: %v", err)
+	}
+
 	srv, err := serverpkg.NewServer(cfg)
 	if err != nil {
 		log.Fatalf("init inventory: %v", err)
 	}
 
-	if err := srv.Start(context.Background()); err != nil {
+	if err := srv.Start(ctx); err != nil {
 		log.Fatalf("inventory exit: %v", err)
 	}
 }
