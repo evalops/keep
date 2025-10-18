@@ -48,7 +48,13 @@ docker-logs:
 	docker compose logs -f
 
 db-migrate:
-	go run ./cmd/attestor migrate
+	go run ./cmd/migrate -direction=up
+
+db-migrate-down:
+	go run ./cmd/migrate -direction=down
+
+db-migrate-status:
+	go run ./cmd/migrate -version
 
 opa-test:
 	opa test ./policies

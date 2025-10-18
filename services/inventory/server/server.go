@@ -47,9 +47,8 @@ func NewServer(cfg Config) (*Server, error) {
 		return nil, err
 	}
 
-	if err := ensureSchema(db); err != nil {
-		return nil, err
-	}
+	// Note: Schema migrations should be run separately using the migrate tool
+	// go run ./cmd/migrate -direction=up
 
 	s := &Server{cfg: cfg, db: db}
 	
@@ -218,6 +217,8 @@ type Device struct {
 	LastUpdated time.Time `json:"last_updated"`
 }
 
+// ensureSchema is deprecated - use golang-migrate tool instead
+// Keeping this function for backward compatibility in tests
 func ensureSchema(db *sql.DB) error {
 	_, err := db.Exec(`
 	CREATE TABLE IF NOT EXISTS devices (
