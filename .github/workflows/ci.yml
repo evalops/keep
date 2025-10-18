@@ -106,13 +106,13 @@ jobs:
           pytest tests/ -v --cov=. --cov-report=xml
 
       - name: Upload Go coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: ./coverage.out
           flags: golang
 
       - name: Upload Python coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           file: ./app/coverage.xml
           flags: python
