@@ -3,12 +3,11 @@ package main
 import (
 	"flag"
 	"log"
-	"os"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	
+
 	"github.com/EvalOps/keep/pkg/secrets"
 )
 
@@ -24,7 +23,7 @@ func main() {
 
 	// Initialize secret management
 	secretHelper := secrets.NewHelperFromEnv()
-	
+
 	// Load database configuration
 	dbConfig := secretHelper.LoadDatabaseConfig()
 	databaseURL := secretHelper.BuildDSN(dbConfig)
@@ -40,24 +39,24 @@ func main() {
 	switch {
 	case *showVersion:
 		showCurrentVersion(m)
-		
+
 	case *force >= 0:
 		forceVersion(m, *force)
-		
+
 	case *direction == "up":
 		if *steps > 0 {
 			migrateSteps(m, *steps)
 		} else {
 			migrateUp(m)
 		}
-		
+
 	case *direction == "down":
 		if *steps > 0 {
 			migrateSteps(m, -*steps)
 		} else {
 			migrateDown(m)
 		}
-		
+
 	default:
 		log.Fatalf("Invalid direction: %s (use 'up' or 'down')", *direction)
 	}
@@ -68,7 +67,7 @@ func showCurrentVersion(m *migrate.Migrate) {
 	if err != nil {
 		log.Fatalf("Failed to get migration version: %v", err)
 	}
-	
+
 	log.Printf("Current migration version: %d", version)
 	if dirty {
 		log.Printf("Migration state is dirty (incomplete migration)")
@@ -117,7 +116,7 @@ func migrateSteps(m *migrate.Migrate, steps int) {
 	} else {
 		log.Printf("Rolling back %d migration steps...", -steps)
 	}
-	
+
 	if err := m.Steps(steps); err != nil {
 		if err == migrate.ErrNoChange {
 			log.Println("No migration changes to apply")

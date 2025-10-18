@@ -13,16 +13,16 @@ import (
 
 func main() {
 	var (
-		action      = flag.String("action", "get", "Action to perform: get, set, list, migrate")
-		secretType  = flag.String("type", "", "Secret manager type: env, ssm, vault, azure")
-		region      = flag.String("region", "", "AWS region for SSM")
-		prefix      = flag.String("prefix", "", "Secret prefix/namespace")
-		key         = flag.String("key", "", "Secret key")
-		value       = flag.String("value", "", "Secret value (for set action)")
-		format      = flag.String("format", "text", "Output format: text, json")
-		vaultAddr   = flag.String("vault-addr", "", "Vault server address")
-		vaultPath   = flag.String("vault-path", "", "Vault secret path")
-		azureURL    = flag.String("azure-url", "", "Azure Key Vault URL")
+		action     = flag.String("action", "get", "Action to perform: get, set, list, migrate")
+		secretType = flag.String("type", "", "Secret manager type: env, ssm, vault, azure")
+		region     = flag.String("region", "", "AWS region for SSM")
+		prefix     = flag.String("prefix", "", "Secret prefix/namespace")
+		key        = flag.String("key", "", "Secret key")
+		value      = flag.String("value", "", "Secret value (for set action)")
+		format     = flag.String("format", "text", "Output format: text, json")
+		vaultAddr  = flag.String("vault-addr", "", "Vault server address")
+		vaultPath  = flag.String("vault-path", "", "Vault secret path")
+		azureURL   = flag.String("azure-url", "", "Azure Key Vault URL")
 	)
 	flag.Parse()
 
@@ -195,8 +195,7 @@ func handleInit(secretType string) {
 }
 
 func printSSMSetup() {
-	fmt.Println(`
-AWS Systems Manager Parameter Store Setup:
+	fmt.Print(`AWS Systems Manager Parameter Store Setup:
 
 1. Install AWS CLI and configure credentials:
    aws configure
@@ -219,8 +218,7 @@ AWS Systems Manager Parameter Store Setup:
 }
 
 func printVaultSetup() {
-	fmt.Println(`
-HashiCorp Vault Setup:
+	fmt.Print(`HashiCorp Vault Setup:
 
 1. Start Vault server (development mode):
    vault server -dev
@@ -245,8 +243,7 @@ HashiCorp Vault Setup:
 }
 
 func printAzureSetup() {
-	fmt.Println(`
-Azure Key Vault Setup:
+	fmt.Print(`Azure Key Vault Setup:
 
 1. Create Key Vault:
    az keyvault create --name keep-secrets --resource-group keep-rg --location eastus
