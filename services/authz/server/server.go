@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ type Server struct {
 	invClient *http.Client
 	mu        sync.Mutex
 	started   bool
+	useTLS    bool
 }
 
 func New(cfg Config) (*Server, error) {
@@ -47,32 +49,39 @@ func New(cfg Config) (*Server, error) {
 	h := http.NewServeMux()
 	h.HandleFunc("/health", s.healthHandler)
 	h.HandleFunc("/v1/auth/verify", s.verifyHandler)
+	h.HandleFunc("/v1/auth/check", s.envoyAuthHandler)
 	h.HandleFunc("/v1/certs/device", s.deviceCertHandler)
 
-	cert, err := tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("load tls cert: %w", err)
-	}
-
-	clientCAs := x509.NewCertPool()
-	if cfg.RootCAPath != "" {
-		pemBytes, err := os.ReadFile(cfg.RootCAPath)
+	useTLS := cfg.TLSCertPath != "" && cfg.TLSKeyPath != ""
+	if useTLS {
+		cert, err := tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("load root ca: %w", err)
+			return nil, fmt.Errorf("load tls cert: %w", err)
 		}
-		if !clientCAs.AppendCertsFromPEM(pemBytes) {
-			return nil, errors.New("failed to parse client CA")
-		}
-	}
 
-	s.httpSrv = &http.Server{
-		Addr:    cfg.HTTPAddr,
-		Handler: h,
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			ClientCAs:    clientCAs,
-		},
+		clientCAs := x509.NewCertPool()
+		if cfg.RootCAPath != "" {
+			pemBytes, err := os.ReadFile(cfg.RootCAPath)
+			if err != nil {
+				return nil, fmt.Errorf("load root ca: %w", err)
+			}
+			if !clientCAs.AppendCertsFromPEM(pemBytes) {
+				return nil, errors.New("failed to parse client CA")
+			}
+		}
+
+		s.httpSrv = &http.Server{
+			Addr:    cfg.HTTPAddr,
+			Handler: h,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				ClientAuth:   tls.NoClientCert,
+				ClientCAs:    clientCAs,
+			},
+		}
+		s.useTLS = true
+	} else {
+		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: h}
 	}
 
 	return s, nil
@@ -88,7 +97,13 @@ func (s *Server) Start(ctx context.Context) error {
 	s.mu.Unlock()
 
 	go func() {
-		if err := s.httpSrv.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		var err error
+		if s.useTLS {
+			err = s.httpSrv.ListenAndServeTLS("", "")
+		} else {
+			err = s.httpSrv.ListenAndServe()
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("authz http server error: %v", err)
 		}
 	}()
@@ -139,6 +154,71 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(verifyResponse{Decision: decision})
+}
+
+func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Attributes struct {
+			Request struct {
+				HTTP struct {
+					Headers map[string]string `json:"headers"`
+				} `json:"http"`
+			} `json:"http"`
+		} `json:"attributes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	headers := toLowerKeys(req.Attributes.Request.HTTP.Headers)
+	authHeader := headers["authorization"]
+	deviceID := headers["x-device-id"]
+	clientIP := headers["x-forwarded-for"]
+	if clientIP == "" {
+		clientIP = headers[":authority"]
+	}
+
+	if authHeader == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
+	}
+
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	tok := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
+	claims, err := token.VerifyGoogleJWT(r.Context(), tok, s.cfg.GoogleClientID)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	decision, err := s.evaluateOPA(r.Context(), claims, deviceID, clientIP)
+	if err != nil {
+		log.Printf("OPA eval error: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	switch decision {
+	case "allow":
+		w.WriteHeader(http.StatusOK)
+	case "step-up":
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("step-up required"))
+	default:
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}
 }
 
 func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceID, clientIP string) (string, error) {
@@ -195,6 +275,14 @@ type inventoryDevice struct {
 	ID        string `json:"id"`
 	Posture   string `json:"posture"`
 	PublicKey string `json:"public_key"`
+}
+
+func toLowerKeys(in map[string]string) map[string]string {
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[strings.ToLower(k)] = v
+	}
+	return out
 }
 
 func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]any {
