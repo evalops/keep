@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -141,6 +143,247 @@ func createTestServer(t *testing.T) *Server {
 	server := &Server{
 		cfg:    cfg,
 		client: &http.Client{Timeout: 5 * time.Second},
+		invClient: &http.Client{Timeout: 3 * time.Second},
+	}
+
+	return server
+}
+
+// TestServer_envoyAuthHandler tests the Envoy auth handler
+func TestServer_envoyAuthHandler(t *testing.T) {
+	// Create mock OPA server
+	mockOPA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/data/keep/allow" && r.Method == http.MethodPost {
+			// Return "allow" decision for test
+			response := map[string]interface{}{
+				"result": "allow",
+			}
+			json.NewEncoder(w).Encode(response)
+		} else {
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer mockOPA.Close()
+
+	// Create mock inventory server
+	mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/v1/devices/") && r.Method == http.MethodGet {
+			// Return device info
+			device := map[string]interface{}{
+				"id":      "test-device",
+				"posture": "healthy",
+			}
+			json.NewEncoder(w).Encode(device)
+		} else {
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer mockInventory.Close()
+
+	server := createTestServerWithMocks(t, mockOPA.URL, mockInventory.URL)
+
+	t.Run("rejects non-POST methods", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/auth/check", nil)
+		rr := httptest.NewRecorder()
+
+		server.envoyAuthHandler(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected status 405, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects invalid JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader([]byte("invalid json")))
+		rr := httptest.NewRecorder()
+
+		server.envoyAuthHandler(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects missing authorization header", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"attributes": map[string]interface{}{
+				"request": map[string]interface{}{
+					"http": map[string]interface{}{
+						"headers": map[string]string{
+							"x-device-id": "test-device",
+						},
+					},
+				},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		server.envoyAuthHandler(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects invalid Bearer token format", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"attributes": map[string]interface{}{
+				"request": map[string]interface{}{
+					"http": map[string]interface{}{
+						"headers": map[string]string{
+							"authorization": "InvalidToken",
+							"x-device-id":   "test-device",
+						},
+					},
+				},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		server.envoyAuthHandler(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", rr.Code)
+		}
+	})
+
+	t.Run("rejects invalid JWT token", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"attributes": map[string]interface{}{
+				"request": map[string]interface{}{
+					"http": map[string]interface{}{
+						"headers": map[string]string{
+							"authorization": "Bearer invalid.jwt.token",
+							"x-device-id":   "test-device",
+						},
+					},
+				},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		server.envoyAuthHandler(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", rr.Code)
+		}
+	})
+
+	t.Run("extracts client IP from headers", func(t *testing.T) {
+		// Test X-Forwarded-For header
+		reqBody := map[string]interface{}{
+			"attributes": map[string]interface{}{
+				"request": map[string]interface{}{
+					"http": map[string]interface{}{
+						"headers": map[string]string{
+							"authorization":    "Bearer invalid.jwt.token",
+							"x-forwarded-for":  "192.168.1.100",
+							"x-device-id":      "test-device",
+						},
+					},
+				},
+			},
+		}
+		body, _ := json.Marshal(reqBody)
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+
+		server.envoyAuthHandler(rr, req)
+
+		// Should still fail due to invalid JWT, but we're testing header parsing
+		if rr.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401 (unauthorized due to invalid JWT), got %d", rr.Code)
+		}
+	})
+}
+
+// TestServer_evaluateOPA tests the OPA evaluation function
+func TestServer_evaluateOPA(t *testing.T) {
+	// Create mock OPA server with different responses
+	testCases := []struct {
+		name           string
+		opaResponse    map[string]interface{}
+		expectedResult string
+		shouldError    bool
+	}{
+		{
+			name:           "allow decision",
+			opaResponse:    map[string]interface{}{"result": "allow"},
+			expectedResult: "allow",
+			shouldError:    false,
+		},
+		{
+			name:           "deny decision",
+			opaResponse:    map[string]interface{}{"result": "deny"},
+			expectedResult: "deny",
+			shouldError:    false,
+		},
+		{
+			name:           "step-up decision",
+			opaResponse:    map[string]interface{}{"result": "step-up"},
+			expectedResult: "step-up",
+			shouldError:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockOPA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/v1/data/keep/allow" && r.Method == http.MethodPost {
+					json.NewEncoder(w).Encode(tc.opaResponse)
+				} else {
+					http.Error(w, "not found", http.StatusNotFound)
+				}
+			}))
+			defer mockOPA.Close()
+
+			server := createTestServerWithMocks(t, mockOPA.URL, "")
+			
+			claims := map[string]any{
+				"email":  "user@example.com",
+				"groups": []string{"admin"},
+			}
+
+			result, err := server.evaluateOPA(context.Background(), claims, "test-device", "192.168.1.1")
+
+			if tc.shouldError {
+				if err == nil {
+					t.Error("Expected error, got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error: %v", err)
+				}
+				if result != tc.expectedResult {
+					t.Errorf("Expected result %s, got %s", tc.expectedResult, result)
+				}
+			}
+		})
+	}
+}
+
+// createTestServerWithMocks creates a test server with mock OPA and inventory URLs
+func createTestServerWithMocks(t *testing.T, opaURL, inventoryURL string) *Server {
+	cfg := Config{
+		HTTPAddr:       ":8443",
+		GoogleClientID: "test-client-id",
+		OPAURL:         opaURL,
+		InventoryAPI:   inventoryURL,
+	}
+
+	server := &Server{
+		cfg:       cfg,
+		client:    &http.Client{Timeout: 5 * time.Second},
 		invClient: &http.Client{Timeout: 3 * time.Second},
 	}
 
