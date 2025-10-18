@@ -8,7 +8,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 )
 
 // AzureManager implements secret management using Azure Key Vault

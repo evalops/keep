@@ -68,6 +68,7 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 	h.HandleFunc("/v1/auth/check", s.envoyAuthHandler)
 	h.HandleFunc("/v1/certs/device", s.deviceCertHandler)
 	h.HandleFunc("/v1/certs/ca", s.caHandler)
+	h.HandleFunc("/v1/tailscale/status", s.tailscaleStatusHandler)
 
 	useTLS := cfg.TLSCertPath != "" && cfg.TLSKeyPath != ""
 	if useTLS {
@@ -104,17 +105,19 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 		s.useTLS = true
 		s.rootCAPEM = rootCAPEM
 	} else {
- if tailscaleListener != nil {
-  s.tsHTTP = &http.Server{Handler: h}
-  s.tsListener = tailscaleListener
- }
-
 		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: h}
 		var err error
 		s.rootCAPEM, err = ca.CertificatePEM()
 		if err != nil {
 			return nil, fmt.Errorf("read ca pem: %w", err)
 		}
+	}
+
+	// Set up Tailscale HTTP server if Tailscale is configured
+	if tailscaleListener != nil {
+		s.tsHTTP = &http.Server{Handler: h}
+		s.tsListener = tailscaleListener
+		log.Printf("Tailscale HTTP server configured on %s", tailscaleListener.Addr().String())
 	}
 
 	return s, nil
@@ -168,8 +171,14 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
+	health := map[string]interface{}{
+		"status":    "ok",
+		"tailscale": s.getTailscaleInfo(),
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	json.NewEncoder(w).Encode(health)
 }
 
 type verifyRequest struct {
@@ -500,4 +509,109 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 		Timeout:   3 * time.Second,
 		Transport: transport,
 	}, nil
+}
+
+// setupTailscale configures and initializes the Tailscale tsnet server
+func setupTailscale(cfg Config) (*tsnet.Server, net.Listener, error) {
+	// If no Tailscale auth key is provided, skip Tailscale setup
+	if cfg.TailscaleAuthKey == "" {
+		log.Println("No Tailscale auth key provided, skipping Tailscale setup")
+		return nil, nil, nil
+	}
+
+	// Create tsnet server
+	tsServer := &tsnet.Server{
+		Dir:      "/tmp/keep-authz-tailscale", // State directory
+		AuthKey:  cfg.TailscaleAuthKey,
+		Hostname: cfg.TailscaleHostname,
+	}
+
+	if cfg.TailscaleHostname == "" {
+		tsServer.Hostname = "keep-authz"
+	}
+
+	log.Printf("Initializing Tailscale with hostname: %s", tsServer.Hostname)
+
+	// Start the Tailscale server
+	listener, err := tsServer.Listen("tcp", cfg.TailscaleListenAddr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create Tailscale listener: %w", err)
+	}
+
+	if cfg.TailscaleListenAddr == "" {
+		listener, err = tsServer.Listen("tcp", ":8444") // Default port for Tailscale
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create Tailscale listener on default port: %w", err)
+		}
+	}
+
+	log.Printf("Tailscale listener created on: %s", listener.Addr().String())
+
+	return tsServer, listener, nil
+}
+
+// getTailscaleInfo returns information about the Tailscale connection
+func (s *Server) getTailscaleInfo() map[string]interface{} {
+	info := map[string]interface{}{
+		"enabled": s.tsServer != nil,
+	}
+
+	if s.tsServer != nil {
+		info["hostname"] = s.cfg.TailscaleHostname
+		if s.cfg.TailscaleHostname == "" {
+			info["hostname"] = "keep-authz"
+		}
+		
+		if s.tsListener != nil {
+			info["listen_addr"] = s.tsListener.Addr().String()
+		}
+	}
+
+	return info
+}
+
+// validateTailscaleAccess checks if a request comes from the Tailscale network
+func (s *Server) validateTailscaleAccess(r *http.Request) bool {
+	if s.tsServer == nil {
+		return false
+	}
+
+	// Get the remote address from the request
+	remoteAddr := r.RemoteAddr
+	if remoteAddr == "" {
+		return false
+	}
+
+	// Parse the remote address to get the IP
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return false
+	}
+
+	// Check if the IP is from the Tailscale network (100.x.x.x range)
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+
+	// Tailscale uses the 100.64.0.0/10 CGNAT range
+	tailscaleNet := &net.IPNet{
+		IP:   net.IPv4(100, 64, 0, 0),
+		Mask: net.CIDRMask(10, 32),
+	}
+
+	return tailscaleNet.Contains(ip)
+}
+
+// tailscaleStatusHandler provides Tailscale network status information
+func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	status := s.getTailscaleInfo()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(status)
 }
