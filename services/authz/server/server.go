@@ -389,6 +389,12 @@ type inventoryDevice struct {
 	PublicKey string `json:"public_key"`
 }
 
+// DevicePostureData represents parsed posture information
+type DevicePostureData struct {
+	Status     string `json:"status"`
+	TrustScore int    `json:"trust_score"`
+}
+
 func toLowerKeys(in map[string]string) map[string]string {
 	out := make(map[string]string, len(in))
 	for k, v := range in {
@@ -454,9 +460,21 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		device.Posture = "unknown"
 	}
 
+	// Parse posture JSON to extract trust score
+	var postureData DevicePostureData
+	if err := json.Unmarshal([]byte(device.Posture), &postureData); err != nil {
+		// Fallback for non-JSON posture data
+		return map[string]any{
+			"id":          device.ID,
+			"posture":     device.Posture,
+			"trust_score": 0,
+		}
+	}
+
 	return map[string]any{
-		"id":      device.ID,
-		"posture": device.Posture,
+		"id":          device.ID,
+		"posture":     postureData.Status,
+		"trust_score": postureData.TrustScore,
 	}
 }
 
