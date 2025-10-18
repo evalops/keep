@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -126,8 +123,6 @@ func TestServer_tailscaleStatusHandler(t *testing.T) {
 
 // createTestServer creates a minimal server for testing
 func createTestServer(t *testing.T) *Server {
-	tmpDir := t.TempDir()
-	
 	// Create a minimal test configuration
 	cfg := Config{
 		HTTPAddr:       ":8443",
@@ -135,10 +130,6 @@ func createTestServer(t *testing.T) *Server {
 		OPAURL:         "http://test-opa:8181",
 		InventoryAPI:   "http://test-inventory:8080",
 	}
-
-	// Create test CA for the server
-	certPath := filepath.Join(tmpDir, "ca.pem")
-	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
 	// We can't use the real PKI here because it would create a dependency
 	// So we'll create a minimal server instance
@@ -158,7 +149,9 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 		if r.URL.Path == "/v1/data/keep/allow" && r.Method == http.MethodPost {
 			// Return "allow" decision for test
 			response := map[string]interface{}{
-				"result": "allow",
+				"result": map[string]interface{}{
+					"decision": "allow",
+				},
 			}
 			json.NewEncoder(w).Encode(response)
 		} else {
@@ -319,20 +312,32 @@ func TestServer_evaluateOPA(t *testing.T) {
 		shouldError    bool
 	}{
 		{
-			name:           "allow decision",
-			opaResponse:    map[string]interface{}{"result": "allow"},
+			name: "allow decision",
+			opaResponse: map[string]interface{}{
+				"result": map[string]interface{}{
+					"decision": "allow",
+				},
+			},
 			expectedResult: "allow",
 			shouldError:    false,
 		},
 		{
-			name:           "deny decision",
-			opaResponse:    map[string]interface{}{"result": "deny"},
+			name: "deny decision",
+			opaResponse: map[string]interface{}{
+				"result": map[string]interface{}{
+					"decision": "deny",
+				},
+			},
 			expectedResult: "deny",
 			shouldError:    false,
 		},
 		{
-			name:           "step-up decision",
-			opaResponse:    map[string]interface{}{"result": "step-up"},
+			name: "step-up decision",
+			opaResponse: map[string]interface{}{
+				"result": map[string]interface{}{
+					"decision": "step-up",
+				},
+			},
 			expectedResult: "step-up",
 			shouldError:    false,
 		},
