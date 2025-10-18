@@ -25,10 +25,10 @@ type CertificateAuthority struct {
 }
 
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certPath), 0o750); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(keyPath), 0o750); err != nil {
 		return nil, err
 	}
 
@@ -70,25 +70,19 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	certOut, err := os.Create(certPath)
-	if err != nil {
-		return nil, err
-	}
-	defer certOut.Close()
-	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes}); err != nil {
+	if err := writeFileSecure(certPath, 0o640, func(f *os.File) error {
+		return pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	}); err != nil {
 		return nil, err
 	}
 
-	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	defer keyOut.Close()
 	encoded, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
 		return nil, err
 	}
-	if err := pem.Encode(keyOut, &pem.Block{Type: "PRIVATE KEY", Bytes: encoded}); err != nil {
+	if err := writeFileSecure(keyPath, 0o600, func(f *os.File) error {
+		return pem.Encode(f, &pem.Block{Type: "PRIVATE KEY", Bytes: encoded})
+	}); err != nil {
 		return nil, err
 	}
 
@@ -130,6 +124,20 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 	}
 
 	return &CertificateAuthority{cert: cert, key: priv, certPath: certPath, keyPath: keyPath}, nil
+}
+
+func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return writeFn(file)
 }
 
 func (c *CertificateAuthority) IssueCertificate(subject pkix.Name, uris []string, dnsNames []string, ttl time.Duration, publicKey any) ([]byte, error) {
