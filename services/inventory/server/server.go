@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -157,7 +156,7 @@ func (s *Server) configureTLS() (*tls.Config, error) {
 
 // requireClientCertMiddleware is middleware that validates client certificates
 func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// If mTLS is not required, check if client cert is present and valid
 		if r.TLS == nil {
 			log.Printf("No TLS connection for authenticated endpoint")
@@ -179,7 +178,7 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 		}
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/EvalOps/keep/pkg/pki"
 	"github.com/EvalOps/keep/services/authz/token"
 	"tailscale.com/tsnet"
@@ -62,13 +64,35 @@ if err != nil {
 }
 
 s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: tsSrv, tsListener: tailscaleListener}
-	h := http.NewServeMux()
-	h.HandleFunc("/health", s.healthHandler)
-	h.HandleFunc("/v1/auth/verify", s.verifyHandler)
-	h.HandleFunc("/v1/auth/check", s.envoyAuthHandler)
-	h.HandleFunc("/v1/certs/device", s.deviceCertHandler)
-	h.HandleFunc("/v1/certs/ca", s.caHandler)
-	h.HandleFunc("/v1/tailscale/status", s.tailscaleStatusHandler)
+	
+	// Create chi router with middleware
+	r := chi.NewRouter()
+	
+	// Add middleware
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(30 * time.Second))
+
+	// Health endpoint
+	r.Get("/health", s.healthHandler)
+	
+	// API routes
+	r.Route("/v1", func(r chi.Router) {
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/verify", s.verifyHandler)
+			r.Post("/check", s.envoyAuthHandler)
+		})
+		
+		r.Route("/certs", func(r chi.Router) {
+			r.Post("/device", s.deviceCertHandler)
+			r.Get("/ca", s.caHandler)
+		})
+		
+		r.Route("/tailscale", func(r chi.Router) {
+			r.Get("/status", s.tailscaleStatusHandler)
+		})
+	})
 
 	useTLS := cfg.TLSCertPath != "" && cfg.TLSKeyPath != ""
 	if useTLS {
@@ -95,7 +119,7 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 
 		s.httpSrv = &http.Server{
 			Addr:    cfg.HTTPAddr,
-			Handler: h,
+			Handler: r,
 			TLSConfig: &tls.Config{
 				Certificates: []tls.Certificate{cert},
 				ClientAuth:   tls.NoClientCert,
@@ -105,7 +129,7 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 		s.useTLS = true
 		s.rootCAPEM = rootCAPEM
 	} else {
-		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: h}
+		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: r}
 		var err error
 		s.rootCAPEM, err = ca.CertificatePEM()
 		if err != nil {
@@ -115,7 +139,7 @@ s := &Server{cfg: cfg, ca: ca, client: client, invClient: invClient, tsServer: t
 
 	// Set up Tailscale HTTP server if Tailscale is configured
 	if tailscaleListener != nil {
-		s.tsHTTP = &http.Server{Handler: h}
+		s.tsHTTP = &http.Server{Handler: r}
 		s.tsListener = tailscaleListener
 		log.Printf("Tailscale HTTP server configured on %s", tailscaleListener.Addr().String())
 	}

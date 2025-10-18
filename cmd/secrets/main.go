@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/EvalOps/keep/pkg/secrets"
 )
@@ -85,17 +84,17 @@ func main() {
 }
 
 func handleGet(ctx context.Context, manager secrets.Manager, key, format string) {
-	value, err := manager.GetSecret(ctx, key)
+	secretValue, err := manager.GetSecret(ctx, key)
 	if err != nil {
 		log.Fatalf("Failed to get secret %s: %v", key, err)
 	}
 
 	switch format {
 	case "json":
-		result := map[string]string{key: value}
+		result := map[string]string{key: secretValue}
 		json.NewEncoder(os.Stdout).Encode(result)
 	default:
-		fmt.Println(value)
+		fmt.Println(secretValue)
 	}
 }
 
@@ -119,7 +118,7 @@ func handleList(ctx context.Context, manager secrets.Manager, format string) {
 
 	results := make(map[string]string)
 	for _, key := range commonKeys {
-		if value, err := manager.GetSecret(ctx, key); err == nil {
+		if _, err := manager.GetSecret(ctx, key); err == nil {
 			results[key] = "[REDACTED]" // Don't show actual values
 		}
 	}
