@@ -90,8 +90,12 @@ func (s *Server) Start(ctx context.Context) error {
 	go s.cleanupExpiredSessions(ctx)
 
 	server := &http.Server{
-		Addr:    s.cfg.Addr,
-		Handler: r,
+		Addr:              s.cfg.Addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
@@ -150,7 +154,9 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 		"expires_at": session.ExpiresAt,
 		"code":       code, // Only for PoC testing
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("failed to encode MFA challenge response")
+	}
 }
 
 // verifyHandler verifies an MFA code
@@ -214,7 +220,9 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		"message": "MFA verification successful",
 		"token":   s.generateMFAToken(session), // Short-lived MFA verification token
 	}
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("failed to encode MFA verify response")
+	}
 }
 
 // statusHandler returns MFA session status
@@ -236,7 +244,9 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(session)
+	if err := json.NewEncoder(w).Encode(session); err != nil {
+		log.Error().Err(err).Msg("failed to encode MFA status response")
+	}
 }
 
 // healthHandler returns service health
@@ -251,7 +261,9 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(health)
+	if err := json.NewEncoder(w).Encode(health); err != nil {
+		log.Error().Err(err).Msg("failed to encode MFA health response")
+	}
 }
 
 // generateMFACode generates a random numeric code

@@ -82,7 +82,14 @@ func NewServer(cfg Config) (*Server, error) {
 		})
 	})
 
-	s.http = &http.Server{Addr: cfg.Addr, Handler: r}
+	s.http = &http.Server{
+		Addr:              cfg.Addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	return s, nil
 }
 
@@ -185,7 +192,9 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+		log.Printf("failed to encode health response: %v", err)
+	}
 }
 
 // updateDevicePosture handles posture update requests
@@ -209,7 +218,9 @@ func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated"}); err != nil {
+		log.Printf("failed to encode posture update response: %v", err)
+	}
 }
 
 type Device struct {
@@ -252,7 +263,9 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 		list = append(list, d)
 	}
 
-	json.NewEncoder(w).Encode(list)
+	if err := json.NewEncoder(w).Encode(list); err != nil {
+		log.Printf("failed to encode list devices response: %v", err)
+	}
 }
 
 func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +284,9 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+		log.Printf("failed to encode registration response: %v", err)
+	}
 }
 
 func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +300,9 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(d)
+	if err := json.NewEncoder(w).Encode(d); err != nil {
+		log.Printf("failed to encode get device response: %v", err)
+	}
 }
 
 func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
@@ -303,5 +320,7 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated"}); err != nil {
+		log.Printf("failed to encode update device response: %v", err)
+	}
 }

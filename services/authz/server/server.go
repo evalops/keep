@@ -163,8 +163,12 @@ func New(cfg Config) (*Server, error) {
 		}
 
 		s.httpSrv = &http.Server{
-			Addr:    cfg.HTTPAddr,
-			Handler: r,
+			Addr:              cfg.HTTPAddr,
+			Handler:           r,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
 			TLSConfig: &tls.Config{
 				Certificates: []tls.Certificate{cert},
 				ClientAuth:   tls.NoClientCert,
@@ -175,7 +179,14 @@ func New(cfg Config) (*Server, error) {
 		s.useTLS = true
 		s.rootCAPEM = rootCAPEM
 	} else {
-		s.httpSrv = &http.Server{Addr: cfg.HTTPAddr, Handler: r}
+		s.httpSrv = &http.Server{
+			Addr:              cfg.HTTPAddr,
+			Handler:           r,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
 		var err error
 		s.rootCAPEM, err = ca.CertificatePEM()
 		if err != nil {
@@ -185,7 +196,13 @@ func New(cfg Config) (*Server, error) {
 
 	// Set up Tailscale HTTP server if Tailscale is configured
 	if tailscaleListener != nil {
-		s.tsHTTP = &http.Server{Handler: r}
+		s.tsHTTP = &http.Server{
+			Handler:           r,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       30 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+		}
 		s.tsListener = tailscaleListener
 		log.Printf("Tailscale HTTP server configured on %s", tailscaleListener.Addr().String())
 	}
@@ -248,7 +265,9 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(health)
+	if err := json.NewEncoder(w).Encode(health); err != nil {
+		log.Printf("failed to encode health response: %v", err)
+	}
 }
 
 type verifyRequest struct {
@@ -285,7 +304,9 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(verifyResponse{Decision: decision})
+	if err := json.NewEncoder(w).Encode(verifyResponse{Decision: decision}); err != nil {
+		log.Printf("failed to encode verify response: %v", err)
+	}
 }
 
 func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
@@ -364,7 +385,9 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 			"device_id":  deviceID,
 			"session_id": middleware.GetReqID(r.Context()),
 		}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("failed to encode envoy auth response: %v", err)
+		}
 	default:
 		http.Error(w, "forbidden", http.StatusForbidden)
 	}
@@ -587,7 +610,9 @@ func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]any{"certificate": string(certPEM)})
+	if err := json.NewEncoder(w).Encode(map[string]any{"certificate": string(certPEM)}); err != nil {
+		log.Printf("failed to encode device cert response: %v", err)
+	}
 }
 
 func (s *Server) caHandler(w http.ResponseWriter, r *http.Request) {
@@ -597,7 +622,9 @@ func (s *Server) caHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/x-pem-file")
 	w.WriteHeader(http.StatusOK)
-	w.Write(s.rootCAPEM)
+	if _, err := w.Write(s.rootCAPEM); err != nil {
+		log.Printf("failed to write CA response: %v", err)
+	}
 }
 
 func decodePEMBlock(p string) ([]byte, error) {
@@ -751,7 +778,9 @@ func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) 
 	status := s.getTailscaleInfo()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(status)
+	if err := json.NewEncoder(w).Encode(status); err != nil {
+		log.Printf("failed to encode tailscale status: %v", err)
+	}
 }
 
 // loggingMiddleware provides structured logging for all requests
