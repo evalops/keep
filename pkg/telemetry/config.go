@@ -12,10 +12,10 @@ const (
 // Config controls OpenTelemetry initialization.
 type Config struct {
 	Endpoint        string
-	Insecure        bool
 	ServiceName     string
 	Environment     string
 	ShutdownTimeout time.Duration
+	Insecure        bool
 }
 
 // defaults applies sane defaults to the configuration.

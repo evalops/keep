@@ -15,7 +15,7 @@ import (
 const (
 	emptyString           = ""
 	defaultAuthzPort      = ":8443"
-	defaultGRPCPort       = ":8444" 
+	defaultGRPCPort       = ":8444"
 	defaultOPAURL         = "http://opa:8181"
 	defaultInventoryURL   = "http://inventory:8080"
 	defaultRootCACertPath = "/data/certs/keep-root.pem"
@@ -59,9 +59,9 @@ func main() {
 		DeviceCertHours:     getenvDuration("DEVICE_CERT_HOURS", 4*time.Hour),
 		TailscaleAuthKey:    secretHelper.GetOrDefault("TAILSCALE_AUTH_KEY", apiKeys["TAILSCALE_AUTH_KEY"]),
 		TailscaleAPIKey:     secretHelper.GetOrDefault("TAILSCALE_API_KEY", apiKeys["TAILSCALE_API_KEY"]),
-		MFAServiceURL:       getenv("MFA_SERVICE_URL", ""),
-		TelemetryEndpoint:   getenv("TELEMETRY_ENDPOINT", ""),
-		TelemetryInsecure:   getenv("TELEMETRY_INSECURE", "") == "1",
+		MFAServiceURL:       getenv("MFA_SERVICE_URL", emptyString),
+		TelemetryEndpoint:   getenv("TELEMETRY_ENDPOINT", emptyString),
+		TelemetryInsecure:   getenv("TELEMETRY_INSECURE", emptyString) == "1",
 		TelemetryEnv:        getenv("ENVIRONMENT", "development"),
 		RequestTimeout:      getenvDuration("AUTHZ_REQUEST_TIMEOUT", 3*time.Second),
 		RetryMaxAttempts:    getenvInt("AUTHZ_RETRY_ATTEMPTS", 3),
@@ -90,7 +90,7 @@ func getenv(key, def string) string {
 }
 
 func getenvDuration(key string, def time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
+	if v := os.Getenv(key); v != emptyString {
 		d, err := time.ParseDuration(v)
 		if err == nil {
 			return d
@@ -100,7 +100,7 @@ func getenvDuration(key string, def time.Duration) time.Duration {
 }
 
 func getenvInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
+	if v := os.Getenv(key); v != emptyString {
 		i, err := strconv.Atoi(v)
 		if err == nil {
 			return i

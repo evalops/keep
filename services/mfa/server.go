@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -29,6 +32,9 @@ const (
 	codeDigits            = 6
 	codeMinValue          = 100000
 	codeRange             = 900000
+	maxCodeValue          = codeMinValue + codeRange - 1
+	codeMinValueUint32    = uint32(codeMinValue)
+	zeroCodeValue         = uint32(0)
 	mfaTokenPrefix        = "mfa-verified"
 	readHeaderTimeout     = 10 * time.Second
 	readTimeout           = 30 * time.Second
@@ -42,6 +48,10 @@ const (
 	fieldMessage   = "message"
 	fieldToken     = "token"
 	fieldAttempts  = "attempts"
+	fieldSessionID = "session_id"
+	fieldDeviceID  = "device_id"
+	fieldUserEmail = "user_email"
+	fieldExpiresAt = "expires_at"
 	// Status values
 	statusOK       = "ok"
 	statusVerified = "verified"
@@ -51,30 +61,39 @@ const (
 	paramSessionID = "sessionID"
 )
 
+var errMFACodeOverflow = errors.New("generated MFA code overflow")
+
 // Server implements a basic MFA service for step-up authentication
 type Server struct {
 	sessions map[string]*session
-	mu       sync.RWMutex
 	cfg      Config
+	mu       sync.RWMutex
 }
 
 // Config holds MFA service configuration
 type Config struct {
 	Addr           string
-	SessionTimeout time.Duration
 	CodeLength     int
+	SessionTimeout time.Duration
 }
 
 // session represents an active MFA challenge session
 type session struct {
-	SessionID   string    `json:"session_id"`
-	DeviceID    string    `json:"device_id"`
-	UserEmail   string    `json:"user_email"`
-	Challenge   string    `json:"challenge"`
-	Code        string    `json:"-"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Attempts    int       `json:"attempts"`
-	MaxAttempts int       `json:"max_attempts"`
+	SessionID   string `json:"session_id"`
+	DeviceID    string `json:"device_id"`
+	UserEmail   string `json:"user_email"`
+	Code        uint32 `json:"-"`
+	Attempts    uint8  `json:"attempts"`
+	MaxAttempts uint8  `json:"max_attempts"`
+	ExpiresAt   int64  `json:"expires_at"`
+}
+
+func (*session) challengeMessage() string {
+	return fmt.Sprintf(challengeTemplate, codeDigits)
+}
+
+func (s *session) expiresAtTime() time.Time {
+	return time.Unix(s.ExpiresAt, 0).UTC()
 }
 
 // ChallengeRequest represents MFA challenge request
@@ -164,11 +183,10 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 		SessionID:   req.SessionID,
 		DeviceID:    req.DeviceID,
 		UserEmail:   req.UserEmail,
-		Challenge:   fmt.Sprintf(challengeTemplate, codeDigits),
 		Code:        code,
-		ExpiresAt:   time.Now().Add(s.cfg.SessionTimeout),
-		Attempts:    initialAttemptCount,
-		MaxAttempts: defaultMaxAttempts,
+		Attempts:    uint8(initialAttemptCount),
+		MaxAttempts: uint8(defaultMaxAttempts),
+		ExpiresAt:   time.Now().Add(s.cfg.SessionTimeout).Unix(),
 	}
 
 	s.mu.Lock()
@@ -180,15 +198,15 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 		Str("session_id", req.SessionID).
 		Str("device_id", req.DeviceID).
 		Str("user_email", req.UserEmail).
-		Str("mfa_code", code).
+		Str("mfa_code", formatMFACode(code)).
 		Msg("MFA challenge created")
 
 	w.Header().Set(headerContentType, contentTypeJSON)
 	response := map[string]interface{}{
-		"session_id":  session.SessionID,
-		fieldChallenge: session.Challenge,
-		"expires_at":  session.ExpiresAt,
-		fieldCode:     code, // Only for PoC testing
+		fieldSessionID: session.SessionID,
+		fieldChallenge: session.challengeMessage(),
+		fieldExpiresAt: session.expiresAtTime(),
+		fieldCode:      formatMFACode(code), // Only for PoC testing
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA challenge response")
@@ -212,7 +230,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check expiration
-	if time.Now().After(session.ExpiresAt) {
+	if time.Now().Unix() > session.ExpiresAt {
 		delete(s.sessions, req.SessionID)
 		s.mu.Unlock()
 		http.Error(w, "session expired", http.StatusUnauthorized)
@@ -229,12 +247,12 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	session.Attempts++
 
-	// Verify code
-	if session.Code != req.Code {
+	codeValue, err := parseMFACode(req.Code)
+	if err != nil || session.Code != codeValue {
 		s.mu.Unlock()
 		log.Warn().
 			Str("session_id", req.SessionID).
-			Int("attempts", session.Attempts).
+			Int("attempts", int(session.Attempts)).
 			Msg("Invalid MFA code attempt")
 		http.Error(w, "invalid code", http.StatusUnauthorized)
 		return
@@ -274,13 +292,13 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if time.Now().After(session.ExpiresAt) {
+	if time.Now().Unix() > session.ExpiresAt {
 		http.Error(w, "session expired", http.StatusUnauthorized)
 		return
 	}
 
 	w.Header().Set(headerContentType, contentTypeJSON)
-	if err := json.NewEncoder(w).Encode(session); err != nil {
+	if err := json.NewEncoder(w).Encode(serializeSession(session)); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA status response")
 	}
 }
@@ -302,15 +320,47 @@ func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+func serializeSession(session *session) map[string]interface{} {
+	return map[string]interface{}{
+		fieldSessionID: session.SessionID,
+		fieldDeviceID:  session.DeviceID,
+		fieldUserEmail: session.UserEmail,
+		fieldChallenge: session.challengeMessage(),
+		fieldExpiresAt: session.expiresAtTime(),
+		fieldAttempts:  session.Attempts,
+		"max_attempts": session.MaxAttempts,
+	}
+}
+
+func formatMFACode(code uint32) string {
+	return fmt.Sprintf("%0*d", codeDigits, code)
+}
+
+func parseMFACode(raw string) (uint32, error) {
+	code, err := strconv.Atoi(raw)
+	if err != nil {
+		return zeroCodeValue, fmt.Errorf("invalid MFA code format: %w", err)
+	}
+	if code < codeMinValue || code > maxCodeValue {
+		return zeroCodeValue, fmt.Errorf("MFA code out of range")
+	}
+	return uint32(code), nil
+}
+
 // generateMFACode generates a random numeric code
-func generateMFACode() (string, error) {
+func generateMFACode() (uint32, error) {
 	max := big.NewInt(codeRange)
 	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate random MFA code: %w", err)
+		return zeroCodeValue, fmt.Errorf("failed to generate random MFA code: %w", err)
 	}
 
-	return fmt.Sprintf("%0*d", codeDigits, n.Int64()+codeMinValue), nil
+	value := n.Uint64()
+	if value > uint64(math.MaxUint32)-uint64(codeMinValueUint32) {
+		return zeroCodeValue, errMFACodeOverflow
+	}
+
+	return uint32(value) + codeMinValueUint32, nil
 }
 
 // generateMFAToken creates a short-lived verification token
@@ -327,9 +377,9 @@ func (s *Server) cleanupExpiredSessions(ctx context.Context) {
 		select {
 		case <-ticker.C:
 			s.mu.Lock()
-			now := time.Now()
+			now := time.Now().Unix()
 			for sessionID, session := range s.sessions {
-				if now.After(session.ExpiresAt) {
+				if now > session.ExpiresAt {
 					delete(s.sessions, sessionID)
 				}
 			}
