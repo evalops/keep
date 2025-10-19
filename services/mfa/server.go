@@ -19,6 +19,9 @@ const (
 	defaultSessionTimeout = 5 * time.Minute
 	defaultCodeLength     = 6
 	defaultMaxAttempts    = 3
+	zeroDuration          = 0 * time.Second
+	zeroCodeLength        = 0
+	initialAttemptCount   = 0
 	challengeTemplate     = "Enter the %d-digit code sent to your registered device"
 	headerContentType     = "Content-Type"
 	contentTypeJSON       = "application/json"
@@ -75,10 +78,10 @@ type VerifyRequest struct {
 
 // New creates a new MFA server
 func New(cfg Config) *Server {
-	if cfg.SessionTimeout <= 0 {
+	if cfg.SessionTimeout <= zeroDuration {
 		cfg.SessionTimeout = defaultSessionTimeout
 	}
-	if cfg.CodeLength <= 0 {
+	if cfg.CodeLength <= zeroCodeLength {
 		cfg.CodeLength = defaultCodeLength
 	}
 
@@ -150,7 +153,7 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 		Challenge:   fmt.Sprintf(challengeTemplate, codeDigits),
 		Code:        code,
 		ExpiresAt:   time.Now().Add(s.cfg.SessionTimeout),
-		Attempts:    0,
+		Attempts:    initialAttemptCount,
 		MaxAttempts: defaultMaxAttempts,
 	}
 
