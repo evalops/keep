@@ -136,6 +136,18 @@ issues:
       linters:
         - errcheck
       text: "Error return value of.*not checked"
+    
+    # Allow higher complexity in server initialization functions
+    - path: "services/.*/server\\.go"
+      linters:
+        - gocyclo
+      text: "func.*New.*is high"
+    
+    # Allow higher complexity in server start functions  
+    - path: "services/.*/server\\.go"
+      linters:
+        - gocyclo
+      text: "func.*Start.*is high"
 
 output:
   formats:
