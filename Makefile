@@ -35,6 +35,7 @@ lint: lint-go lint-python
 
 lint-go:
 	@echo "Linting Go code..."
+	go mod download
 	golangci-lint run
 
 lint-python:
