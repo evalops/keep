@@ -160,59 +160,8 @@ func New(cfg Config) (*Server, error) {
 
 	r := s.setupRouter()
 
-	useTLS := cfg.TLSCertPath != emptyString && cfg.TLSKeyPath != emptyString
-	if useTLS {
-		cert, err := tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("load tls cert: %w", err)
-		}
-
-		clientCAs := x509.NewCertPool()
-		if cfg.RootCAPath != "" {
-			pemBytes, err := os.ReadFile(cfg.RootCAPath)
-			if err != nil {
-				return nil, fmt.Errorf("load root ca: %w", err)
-			}
-			if !clientCAs.AppendCertsFromPEM(pemBytes) {
-				return nil, errors.New("failed to parse client CA")
-			}
-		}
-
-		rootCAPEM, err := ca.CertificatePEM()
-		if err != nil {
-			return nil, fmt.Errorf("read ca pem: %w", err)
-		}
-
-		s.httpSrv = &http.Server{
-			Addr:              cfg.HTTPAddr,
-			Handler:           r,
-			ReadHeaderTimeout: defaultReadHeaderTimeout,
-			ReadTimeout:       defaultReadTimeout,
-			WriteTimeout:      defaultWriteTimeout,
-			IdleTimeout:       defaultIdleTimeout,
-			TLSConfig: &tls.Config{
-				Certificates: []tls.Certificate{cert},
-				ClientAuth:   tls.NoClientCert,
-				ClientCAs:    clientCAs,
-				MinVersion:   tls.VersionTLS13,
-			},
-		}
-		s.useTLS = true
-		s.rootCAPEM = rootCAPEM
-	} else {
-		s.httpSrv = &http.Server{
-			Addr:              cfg.HTTPAddr,
-			Handler:           r,
-			ReadHeaderTimeout: defaultReadHeaderTimeout,
-			ReadTimeout:       defaultReadTimeout,
-			WriteTimeout:      defaultWriteTimeout,
-			IdleTimeout:       defaultIdleTimeout,
-		}
-		var err error
-		s.rootCAPEM, err = ca.CertificatePEM()
-		if err != nil {
-			return nil, fmt.Errorf("read ca pem: %w", err)
-		}
+	if err := s.setupHTTPServer(cfg, r, ca); err != nil {
+		return nil, fmt.Errorf("setup HTTP server: %w", err)
 	}
 
 	// Set up Tailscale HTTP server if Tailscale is configured
@@ -1015,6 +964,67 @@ func (s *Server) setupRouter() chi.Router {
 	})
 	
 	return r
+}
+
+// setupHTTPServer configures the main HTTP server with optional TLS
+func (s *Server) setupHTTPServer(cfg Config, handler http.Handler, ca *pki.CertificateAuthority) error {
+	useTLS := cfg.TLSCertPath != emptyString && cfg.TLSKeyPath != emptyString
+	
+	if useTLS {
+		cert, err := tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
+		if err != nil {
+			return fmt.Errorf("load tls cert: %w", err)
+		}
+
+		clientCAs := x509.NewCertPool()
+		if cfg.RootCAPath != "" {
+			pemBytes, err := os.ReadFile(cfg.RootCAPath)
+			if err != nil {
+				return fmt.Errorf("load root ca: %w", err)
+			}
+			if !clientCAs.AppendCertsFromPEM(pemBytes) {
+				return errors.New("failed to parse client CA")
+			}
+		}
+
+		rootCAPEM, err := ca.CertificatePEM()
+		if err != nil {
+			return fmt.Errorf("read ca pem: %w", err)
+		}
+
+		s.httpSrv = &http.Server{
+			Addr:              cfg.HTTPAddr,
+			Handler:           handler,
+			ReadHeaderTimeout: defaultReadHeaderTimeout,
+			ReadTimeout:       defaultReadTimeout,
+			WriteTimeout:      defaultWriteTimeout,
+			IdleTimeout:       defaultIdleTimeout,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+				ClientAuth:   tls.NoClientCert,
+				ClientCAs:    clientCAs,
+				MinVersion:   tls.VersionTLS13,
+			},
+		}
+		s.useTLS = true
+		s.rootCAPEM = rootCAPEM
+	} else {
+		s.httpSrv = &http.Server{
+			Addr:              cfg.HTTPAddr,
+			Handler:           handler,
+			ReadHeaderTimeout: defaultReadHeaderTimeout,
+			ReadTimeout:       defaultReadTimeout,
+			WriteTimeout:      defaultWriteTimeout,
+			IdleTimeout:       defaultIdleTimeout,
+		}
+		var err error
+		s.rootCAPEM, err = ca.CertificatePEM()
+		if err != nil {
+			return fmt.Errorf("read ca pem: %w", err)
+		}
+	}
+	
+	return nil
 }
 
 // writeJSONResponse writes a JSON response with proper headers
