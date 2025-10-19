@@ -59,8 +59,8 @@ type session struct {
 	Challenge   string    `json:"challenge"`
 	Code        string    `json:"-"`
 	ExpiresAt   time.Time `json:"expires_at"`
-	MaxAttempts int       `json:"max_attempts"`
 	Attempts    int       `json:"attempts"`
+	MaxAttempts int       `json:"max_attempts"`
 }
 
 // ChallengeRequest represents MFA challenge request
