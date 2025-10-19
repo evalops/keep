@@ -6,27 +6,23 @@ import (
 )
 
 const (
-	newlineSeparator     = "\n"
 	displayNamePrefix    = "displayName="
 	displayNamePrefixLen = len(displayNamePrefix)
 	powershellCmd        = "powershell"
 	powershellFlag       = "-Command"
-	
+
 	// OS constants
 	windowsOSName = "Windows"
-	
+
 	// Service names
 	windowsDefenderFirewall = "Windows Defender Firewall"
-	
+
 	// Command keywords and patterns
-	firewallStateOn     = "state                                 on"
-	antivirusEnabled    = "true"
-	protectionOn        = "protection on"
-	fullyEncrypted      = "fully encrypted"
-	minPasswordLength   = "minimum password length"
-	
-	// Rule prefix for firewall rule counting
-	ruleNamePrefix = "Rule Name:"
+	firewallStateOn   = "state                                 on"
+	antivirusEnabled  = "true"
+	protectionOn      = "protection on"
+	fullyEncrypted    = "fully encrypted"
+	minPasswordLength = "minimum password length"
 )
 
 // WindowsCollector collects device posture on Windows systems
@@ -35,21 +31,22 @@ type WindowsCollector struct{}
 // CollectPosture collects device posture information on Windows
 func (c *WindowsCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
-		OS: OperatingSystem{
+		OS: &OperatingSystem{
 			Name: windowsOSName,
 			Arch: runtime.GOARCH,
 		},
+		Firewall: &FirewallStatus{},
 	}
 
 	// Collect OS information
-	if err := c.collectOSInfo(&posture.OS); err != nil {
+	if err := c.collectOSInfo(posture.OS); err != nil {
 		return nil, err
 	}
 
 	// Collect firewall status
-	if err := c.collectFirewallStatus(&posture.Firewall); err != nil {
+	if err := c.collectFirewallStatus(posture.Firewall); err != nil {
 		// Non-fatal error, continue with default values
-		posture.Firewall = FirewallStatus{Enabled: false, Service: UnknownService}
+		*posture.Firewall = FirewallStatus{Service: UnknownService}
 	}
 
 	// Collect other security posture information
@@ -72,18 +69,19 @@ func (c *WindowsCollector) collectOSInfo(os *OperatingSystem) error {
 		return err
 	}
 
-	lines := strings.Split(output, newlineSeparator)
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	lines := strings.Split(output, newline)
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
 		if line == "" {
 			continue
 		}
 
-		if strings.HasPrefix(line, "Caption=") {
+		switch {
+		case strings.HasPrefix(line, "Caption="):
 			os.Name = strings.TrimPrefix(line, "Caption=")
-		} else if strings.HasPrefix(line, "Version=") {
+		case strings.HasPrefix(line, "Version="):
 			os.Version = strings.TrimPrefix(line, "Version=")
-		} else if strings.HasPrefix(line, "BuildNumber=") {
+		case strings.HasPrefix(line, "BuildNumber="):
 			os.Build = strings.TrimPrefix(line, "BuildNumber=")
 		}
 	}
@@ -98,7 +96,8 @@ func (c *WindowsCollector) collectOSInfo(os *OperatingSystem) error {
 }
 
 // collectFirewallStatus checks Windows Defender Firewall status
-func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
+func (c *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
+	_ = c
 	fw.Service = windowsDefenderFirewall
 
 	// Check firewall state using netsh
@@ -114,10 +113,10 @@ func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	if fw.Enabled {
 		ruleOutput, err := runCommand("netsh", "advfirewall", "firewall", "show", "rule", "name=all")
 		if err == nil {
-			lines := strings.Split(ruleOutput, newlineSeparator)
+			lines := strings.Split(ruleOutput, newline)
 			ruleCount := initialCapacity
 			for _, line := range lines {
-				if strings.HasPrefix(strings.TrimSpace(line), ruleNamePrefix) {
+				if strings.HasPrefix(strings.TrimSpace(line), RuleNamePrefix) {
 					ruleCount++
 				}
 			}
@@ -129,7 +128,8 @@ func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 }
 
 // checkAntiVirus checks Windows Defender and other antivirus software
-func (_ *WindowsCollector) checkAntiVirus() bool {
+func (c *WindowsCollector) checkAntiVirus() bool {
+	_ = c
 	// Check Windows Defender status
 	output, err := runCommand(powershellCmd, powershellFlag, "Get-MpComputerStatus | Select-Object AntivirusEnabled")
 	if err == nil && strings.Contains(strings.ToLower(output), antivirusEnabled) {
@@ -139,7 +139,7 @@ func (_ *WindowsCollector) checkAntiVirus() bool {
 	// Check for other antivirus software using WMI
 	output, err = runCommand("wmic", "/namespace:\\\\root\\SecurityCenter2", "path", "AntiVirusProduct", "get", "displayName", "/format:list")
 	if err == nil {
-		lines := strings.Split(output, newlineSeparator)
+		lines := strings.Split(output, newline)
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
 			if strings.HasPrefix(line, displayNamePrefix) && len(line) > displayNamePrefixLen {
@@ -152,7 +152,8 @@ func (_ *WindowsCollector) checkAntiVirus() bool {
 }
 
 // checkSystemUpdated checks Windows Update status
-func (_ *WindowsCollector) checkSystemUpdated() bool {
+func (c *WindowsCollector) checkSystemUpdated() bool {
+	_ = c
 	// Check for pending updates using PowerShell
 	output, err := runCommand(powershellCmd, powershellFlag,
 		"Get-WUList -MicrosoftUpdate | Measure-Object | Select-Object -ExpandProperty Count")
@@ -171,7 +172,8 @@ func (_ *WindowsCollector) checkSystemUpdated() bool {
 }
 
 // checkDiskEncryption checks BitLocker status
-func (_ *WindowsCollector) checkDiskEncryption() bool {
+func (c *WindowsCollector) checkDiskEncryption() bool {
+	_ = c
 	// Check BitLocker status
 	output, err := runCommand("manage-bde", "-status")
 	if err != nil {
@@ -184,7 +186,8 @@ func (_ *WindowsCollector) checkDiskEncryption() bool {
 }
 
 // checkScreenLock checks screen lock/password policy
-func (_ *WindowsCollector) checkScreenLock() bool {
+func (c *WindowsCollector) checkScreenLock() bool {
+	_ = c
 	// Check screen saver settings
 	output, err := runCommand("reg", "query",
 		"HKEY_CURRENT_USER\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop",
@@ -196,7 +199,7 @@ func (_ *WindowsCollector) checkScreenLock() bool {
 	// Check password policy
 	output, err = runCommand("net", "accounts")
 	if err == nil {
-		lines := strings.Split(output, "\n")
+		lines := strings.Split(output, newline)
 		for _, line := range lines {
 			if strings.Contains(strings.ToLower(line), minPasswordLength) {
 				if strings.Contains(line, "0") {
@@ -219,13 +222,14 @@ func (_ *WindowsCollector) checkScreenLock() bool {
 
 // isOSSupported checks if the Windows version is supported
 func (c *WindowsCollector) isOSSupported(version string) bool {
+	_ = c
 	if version == "" {
 		return false
 	}
 
 	// Parse major version (e.g., "10.0.19045" -> 10)
 	parts := strings.Split(version, ".")
-	if len(parts) == 0 {
+	if len(parts) == initialCapacity {
 		return false
 	}
 

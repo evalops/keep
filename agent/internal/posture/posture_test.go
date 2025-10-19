@@ -8,6 +8,15 @@ import (
 	"testing"
 )
 
+const (
+	testNameKey     = "NAME"
+	testVersionKey  = "VERSION"
+	testIDKey       = "ID"
+	zeroStringValue = "0"
+	invalidValue    = "invalid"
+	decimalValue    = "12.34"
+)
+
 // TestGetCollector tests the collector factory function
 func TestGetCollector(t *testing.T) {
 	collector := GetCollector()
@@ -30,73 +39,83 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 	testCases := []struct {
 		name           string
 		posture        DevicePosture
+		expectedStatus TrustStatus
 		expectedScore  int
-		expectedStatus string
 	}{
 		{
 			name: "perfect security posture",
 			posture: DevicePosture{
-				OS:            OperatingSystem{Supported: true},
-				Firewall:      FirewallStatus{Enabled: true},
-				AntiVirus:     true,
-				SystemUpdate:  true,
-				DiskEncrypted: true,
-				ScreenLock:    true,
+				OS:       &OperatingSystem{Supported: true},
+				Firewall: &FirewallStatus{Enabled: true},
+				SecurityFeatureSet: SecurityFeatureSet{
+					AntiVirus:     true,
+					SystemUpdate:  true,
+					DiskEncrypted: true,
+					ScreenLock:    true,
+				},
 			},
+			expectedStatus: TrustStatusHealthy,
 			expectedScore:  TestScoreHealthy,
-			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "good security posture",
 			posture: DevicePosture{
-				OS:            OperatingSystem{Supported: true},
-				Firewall:      FirewallStatus{Enabled: true},
-				AntiVirus:     false,
-				SystemUpdate:  true,
-				DiskEncrypted: true,
-				ScreenLock:    true,
+				OS:       &OperatingSystem{Supported: true},
+				Firewall: &FirewallStatus{Enabled: true},
+				SecurityFeatureSet: SecurityFeatureSet{
+					AntiVirus:     false,
+					SystemUpdate:  true,
+					DiskEncrypted: true,
+					ScreenLock:    true,
+				},
 			},
+			expectedStatus: TrustStatusHealthy,
 			expectedScore:  TestScoreCompliant,
-			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "compliant security posture",
 			posture: DevicePosture{
-				OS:            OperatingSystem{Supported: true},
-				Firewall:      FirewallStatus{Enabled: true},
-				AntiVirus:     false,
-				SystemUpdate:  false,
-				DiskEncrypted: true,
-				ScreenLock:    false,
+				OS:       &OperatingSystem{Supported: true},
+				Firewall: &FirewallStatus{Enabled: true},
+				SecurityFeatureSet: SecurityFeatureSet{
+					AntiVirus:     false,
+					SystemUpdate:  false,
+					DiskEncrypted: true,
+					ScreenLock:    false,
+				},
 			},
+			expectedStatus: TrustStatusCompliant,
 			expectedScore:  TestScoreWarning,
-			expectedStatus: StatusCompliant,
 		},
 		{
 			name: "warning security posture",
 			posture: DevicePosture{
-				OS:            OperatingSystem{Supported: false},
-				Firewall:      FirewallStatus{Enabled: true},
-				AntiVirus:     false,
-				SystemUpdate:  false,
-				DiskEncrypted: false,
-				ScreenLock:    true,
+				OS:       &OperatingSystem{Supported: false},
+				Firewall: &FirewallStatus{Enabled: true},
+				SecurityFeatureSet: SecurityFeatureSet{
+					AntiVirus:     false,
+					SystemUpdate:  false,
+					DiskEncrypted: false,
+					ScreenLock:    true,
+				},
 			},
+			expectedStatus: TrustStatusCritical,
 			expectedScore:  TestScoreCritical,
-			expectedStatus: StatusCritical,
 		},
 		{
 			name: "critical security posture",
 			posture: DevicePosture{
-				OS:            OperatingSystem{Supported: false},
-				Firewall:      FirewallStatus{Enabled: false},
-				AntiVirus:     false,
-				SystemUpdate:  false,
-				DiskEncrypted: false,
-				ScreenLock:    false,
+				OS:       &OperatingSystem{Supported: false},
+				Firewall: &FirewallStatus{Enabled: false},
+				SecurityFeatureSet: SecurityFeatureSet{
+					AntiVirus:     false,
+					SystemUpdate:  false,
+					DiskEncrypted: false,
+					ScreenLock:    false,
+				},
 			},
-			expectedScore:  0,
-			expectedStatus: StatusCritical,
+			expectedStatus: TrustStatusCritical,
+			expectedScore:  DefaultRules,
 		},
 	}
 
@@ -110,7 +129,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 			}
 
 			if posture.Status != tc.expectedStatus {
-				t.Errorf("Expected status %s, got %s", tc.expectedStatus, posture.Status)
+				t.Errorf("Expected status %s, got %s", tc.expectedStatus.String(), posture.Status.String())
 			}
 		})
 	}
@@ -119,23 +138,26 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 // TestDevicePosture_ToJSON tests JSON serialization
 func TestDevicePosture_ToJSON(t *testing.T) {
 	posture := &DevicePosture{
-		OS: OperatingSystem{
+		OS: &OperatingSystem{
 			Name:      "Ubuntu 22.04",
 			Version:   "22.04",
 			Arch:      "amd64",
 			Supported: true,
 		},
-		Firewall: FirewallStatus{
-			Enabled: true,
-			Rules:   testRuleCount,
+		Firewall: &FirewallStatus{
 			Service: "ufw",
+			Ports:   nil,
+			Rules:   testRuleCount,
+			Enabled: true,
 		},
-		AntiVirus:     false,
-		SystemUpdate:  true,
-		DiskEncrypted: true,
-		ScreenLock:    true,
-		TrustScore:    85,
-		Status:        StatusHealthy,
+		SecurityFeatureSet: SecurityFeatureSet{
+			AntiVirus:     false,
+			SystemUpdate:  true,
+			DiskEncrypted: true,
+			ScreenLock:    true,
+		},
+		TrustScore: TestScoreCompliant,
+		Status:     TrustStatusHealthy,
 	}
 
 	jsonStr, err := posture.ToJSON()
@@ -163,7 +185,7 @@ func TestDevicePosture_ToJSON(t *testing.T) {
 	}
 
 	if parsed.Status != posture.Status {
-		t.Errorf("Expected status %s, got %s", posture.Status, parsed.Status)
+		t.Errorf("Expected status %s, got %s", posture.Status.String(), parsed.Status.String())
 	}
 }
 
@@ -171,8 +193,8 @@ func TestDevicePosture_ToJSON(t *testing.T) {
 func TestParseKeyValue(t *testing.T) {
 	testCases := []struct {
 		name     string
-		input    string
 		expected map[string]string
+		input    string
 	}{
 		{
 			name: "simple key-value pairs",
@@ -180,9 +202,9 @@ func TestParseKeyValue(t *testing.T) {
 VERSION="22.04 LTS"
 ID=ubuntu`,
 			expected: map[string]string{
-				"NAME":    "Ubuntu",
-				"VERSION": "22.04 LTS",
-				"ID":      "ubuntu",
+				testNameKey:    "Ubuntu",
+				testVersionKey: "22.04 LTS",
+				testIDKey:      "ubuntu",
 			},
 		},
 		{
@@ -194,9 +216,9 @@ VERSION=1.0
 # Another comment
 ID=test`,
 			expected: map[string]string{
-				"NAME":    "Test",
-				"VERSION": "1.0",
-				"ID":      "test",
+				testNameKey:    "Test",
+				testVersionKey: "1.0",
+				testIDKey:      "test",
 			},
 		},
 		{
@@ -205,9 +227,9 @@ ID=test`,
 VERSION="20.04 LTS"
 ID=ubuntu`,
 			expected: map[string]string{
-				"NAME":    "Ubuntu Server",
-				"VERSION": "20.04 LTS",
-				"ID":      "ubuntu",
+				testNameKey:    "Ubuntu Server",
+				testVersionKey: "20.04 LTS",
+				testIDKey:      "ubuntu",
 			},
 		},
 		{
@@ -221,8 +243,8 @@ ID=ubuntu`,
 INVALID_LINE_WITHOUT_EQUALS
 VERSION=22.04`,
 			expected: map[string]string{
-				"NAME":    "Ubuntu",
-				"VERSION": "22.04",
+				testNameKey:    "Ubuntu",
+				testVersionKey: "22.04",
 			},
 		},
 	}
@@ -245,11 +267,11 @@ func TestParseInt(t *testing.T) {
 		expected int
 	}{
 		{"123", testNumber123},
-		{"0", 0},
+		{zeroStringValue, DefaultRules},
 		{"-456", testNumberNeg456},
-		{"invalid", 0},
-		{"", 0},
-		{"12.34", 0}, // Should fail for non-integer
+		{invalidValue, DefaultRules},
+		{emptyString, DefaultRules},
+		{decimalValue, DefaultRules}, // Should fail for non-integer
 	}
 
 	for _, tc := range testCases {

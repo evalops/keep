@@ -10,16 +10,73 @@ import (
 	"strings"
 )
 
+// TrustStatus represents the overall posture state and is stored as a compact enumeration.
+type TrustStatus uint8
+
+const (
+	TrustStatusUnknown TrustStatus = iota
+	TrustStatusHealthy
+	TrustStatusCompliant
+	TrustStatusWarning
+	TrustStatusCritical
+)
+
+func (ts TrustStatus) String() string {
+	switch ts {
+	case TrustStatusHealthy:
+		return StatusHealthy
+	case TrustStatusCompliant:
+		return StatusCompliant
+	case TrustStatusWarning:
+		return StatusWarning
+	case TrustStatusCritical:
+		return StatusCritical
+	default:
+		return StatusCritical
+	}
+}
+
+// MarshalJSON encodes the trust status as its string representation.
+func (ts TrustStatus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ts.String())
+}
+
+// UnmarshalJSON decodes a trust status from its textual representation.
+func (ts *TrustStatus) UnmarshalJSON(data []byte) error {
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	switch strings.ToLower(value) {
+	case StatusHealthy:
+		*ts = TrustStatusHealthy
+	case StatusCompliant:
+		*ts = TrustStatusCompliant
+	case StatusWarning:
+		*ts = TrustStatusWarning
+	case StatusCritical:
+		*ts = TrustStatusCritical
+	default:
+		*ts = TrustStatusUnknown
+	}
+	return nil
+}
+
 // DevicePosture represents the security posture of a device
 type DevicePosture struct {
-	OS            OperatingSystem `json:"os"`
-	Firewall      FirewallStatus  `json:"firewall"`
-	TrustScore    int             `json:"trust_score"`
-	Status        string          `json:"status"`
-	AntiVirus     bool            `json:"antivirus_enabled"`
-	SystemUpdate  bool            `json:"system_updated"`
-	DiskEncrypted bool            `json:"disk_encrypted"`
-	ScreenLock    bool            `json:"screen_lock_enabled"`
+	OS         *OperatingSystem `json:"os"`
+	Firewall   *FirewallStatus  `json:"firewall"`
+	TrustScore int              `json:"trust_score"`
+	Status     TrustStatus      `json:"status"`
+	SecurityFeatureSet
+}
+
+// SecurityFeatureSet groups boolean security attributes and is embedded for JSON compatibility.
+type SecurityFeatureSet struct {
+	AntiVirus     bool `json:"antivirus_enabled"`
+	SystemUpdate  bool `json:"system_updated"`
+	DiskEncrypted bool `json:"disk_encrypted"`
+	ScreenLock    bool `json:"screen_lock_enabled"`
 }
 
 // OperatingSystem contains OS information
@@ -34,10 +91,10 @@ type OperatingSystem struct {
 
 // FirewallStatus contains firewall information
 type FirewallStatus struct {
-	Enabled bool     `json:"enabled"`
-	Rules   int      `json:"rules"`
 	Service string   `json:"service"`
 	Ports   []string `json:"open_ports"`
+	Rules   int      `json:"rules"`
+	Enabled bool     `json:"enabled"`
 }
 
 // Collector defines the interface for collecting device posture
@@ -72,11 +129,11 @@ func (p *DevicePosture) ToJSON() (string, error) {
 func (p *DevicePosture) CalculateTrustScore() {
 	score := DefaultRules
 
-	if p.OS.Supported {
+	if p.OS != nil && p.OS.Supported {
 		score += TrustBonusOS
 	}
 
-	if p.Firewall.Enabled {
+	if p.Firewall != nil && p.Firewall.Enabled {
 		score += TrustBonusFirewall
 	}
 
@@ -101,13 +158,13 @@ func (p *DevicePosture) CalculateTrustScore() {
 	// Set status based on score
 	switch {
 	case score >= TrustThresholdHealthy:
-		p.Status = StatusHealthy
+		p.Status = TrustStatusHealthy
 	case score >= TrustThresholdCompliant:
-		p.Status = StatusCompliant
+		p.Status = TrustStatusCompliant
 	case score >= TrustThresholdWarning:
-		p.Status = StatusWarning
+		p.Status = TrustStatusWarning
 	default:
-		p.Status = StatusCritical
+		p.Status = TrustStatusCritical
 	}
 }
 

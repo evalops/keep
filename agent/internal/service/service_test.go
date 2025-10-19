@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	testDeviceID       = "test-device"
-	initialCapacity    = 0
-	pidFileMode        = 0o600
-	testInventoryPort  = ":8081"
-	testAttestPort     = ":8443"
-	testPIDContent     = "12345\n"
-	localhostBase      = "http://localhost"
+	testDeviceID      = "test-device"
+	initialCapacity   = 0
+	pidFileMode       = 0o600
+	testInventoryPort = ":8081"
+	testAttestPort    = ":8443"
+	testPIDContent    = "12345\n"
+	localhostBase     = "http://localhost"
 )
 
 // mockPostureCollector implements the posture.Collector interface for testing
@@ -129,8 +129,8 @@ func TestService_initialRegistration(t *testing.T) {
 		// Set mock posture collector
 		service.collector = &mockPostureCollector{
 			postureData: &posture.DevicePosture{
-				Status:     "healthy",
-				TrustScore: 85,
+				Status:     posture.TrustStatusHealthy,
+				TrustScore: posture.TestScoreCompliant,
 			},
 		}
 
@@ -202,8 +202,8 @@ func TestService_initialRegistration(t *testing.T) {
 		// Set mock posture collector
 		service.collector = &mockPostureCollector{
 			postureData: &posture.DevicePosture{
-				Status:     "healthy",
-				TrustScore: 85,
+				Status:     posture.TrustStatusHealthy,
+				TrustScore: posture.TestScoreCompliant,
 			},
 		}
 
@@ -264,8 +264,8 @@ func TestService_updatePosture(t *testing.T) {
 		// Set mock posture collector
 		service.collector = &mockPostureCollector{
 			postureData: &posture.DevicePosture{
-				Status:     "warning",
-				TrustScore: 65,
+				Status:     posture.TrustStatusWarning,
+				TrustScore: posture.TestScoreWarning,
 			},
 		}
 

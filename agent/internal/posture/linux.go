@@ -8,34 +8,32 @@ import (
 const (
 	// OS constants
 	linuxOSName = "Linux"
-	
+
 	// Service names
 	ufwService      = "ufw"
 	iptablesService = "iptables"
-	
+
 	// Command keywords
 	ufwStatusActive = "status: active"
 	cryptoLUKS      = "crypto_luks"
 	cryptKeyword    = "crypt"
 	trueKeyword     = "true"
-	
+
 	// Firewall rule keywords
 	allowKeyword  = "ALLOW"
 	denyKeyword   = "DENY"
 	acceptKeyword = "ACCEPT"
 	dropKeyword   = "DROP"
 	rejectKeyword = "REJECT"
-	
+
 	// Table headers to ignore
 	chainPrefix  = "Chain"
 	targetPrefix = "target"
 	numPrefix    = "num"
 )
 
-var (
-	// Common Linux antivirus software
-	linuxAntivirusSoftware = []string{"clamav", "sophos", "avast", "bitdefender", "eset"}
-)
+// Common Linux antivirus software
+var linuxAntivirusSoftware = []string{"clamav", "sophos", "avast", "bitdefender", "eset"}
 
 // LinuxCollector collects device posture on Linux systems
 type LinuxCollector struct{}
@@ -43,21 +41,22 @@ type LinuxCollector struct{}
 // CollectPosture collects device posture information on Linux
 func (c *LinuxCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
-		OS: OperatingSystem{
+		OS: &OperatingSystem{
 			Name: linuxOSName,
 			Arch: runtime.GOARCH,
 		},
+		Firewall: &FirewallStatus{},
 	}
 
 	// Collect OS information
-	if err := c.collectOSInfo(&posture.OS); err != nil {
+	if err := c.collectOSInfo(posture.OS); err != nil {
 		return nil, err
 	}
 
 	// Collect firewall status
-	if err := c.collectFirewallStatus(&posture.Firewall); err != nil {
+	if err := c.collectFirewallStatus(posture.Firewall); err != nil {
 		// Non-fatal error, continue with default values
-		posture.Firewall = FirewallStatus{Enabled: false, Service: UnknownService}
+		*posture.Firewall = FirewallStatus{Service: UnknownService}
 	}
 
 	// Collect other security posture information
@@ -132,8 +131,8 @@ func checkUFW(fw *FirewallStatus) bool {
 	fw.Enabled = strings.Contains(strings.ToLower(output), ufwStatusActive)
 
 	// Count rules (simplified)
-	lines := strings.Split(output, "\n")
-	ruleCount := 0
+	lines := strings.Split(output, newline)
+	ruleCount := initialCapacity
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "Status:") &&
@@ -150,6 +149,7 @@ func checkUFW(fw *FirewallStatus) bool {
 
 // checkIptables checks iptables firewall status
 func (c *LinuxCollector) checkIptables(fw *FirewallStatus) error {
+	_ = c
 	output, err := runCommand("iptables", "-L")
 	if err != nil {
 		fw.Enabled = false
@@ -160,7 +160,7 @@ func (c *LinuxCollector) checkIptables(fw *FirewallStatus) error {
 	fw.Service = iptablesService
 	// If iptables returns without error and has rules, consider it enabled
 	lines := strings.Split(output, "\n")
-	ruleCount := 0
+	ruleCount := initialCapacity
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, chainPrefix) &&
@@ -180,6 +180,7 @@ func (c *LinuxCollector) checkIptables(fw *FirewallStatus) error {
 
 // checkAntiVirus checks for antivirus software
 func (c *LinuxCollector) checkAntiVirus() bool {
+	_ = c
 	// Check for common Linux antivirus solutions
 	antivirusSoftware := linuxAntivirusSoftware
 
@@ -199,12 +200,14 @@ func (c *LinuxCollector) checkAntiVirus() bool {
 
 // checkSystemUpdated checks if system is up to date
 func (c *LinuxCollector) checkSystemUpdated() bool {
+	_ = c
 	// Check for pending updates (works on Debian/Ubuntu systems)
 	output, err := runCommand("apt", "list", "--upgradable")
 	if err == nil {
-		lines := strings.Split(output, "\n")
+		lines := strings.Split(output, newline)
 		// If only header line, no updates available
-		return len(lines) <= 2
+		const headerAndFooterLines = 2
+		return len(lines) <= headerAndFooterLines
 	}
 
 	// Try yum/dnf for Red Hat systems
@@ -214,11 +217,12 @@ func (c *LinuxCollector) checkSystemUpdated() bool {
 		return true
 	}
 
-	return strings.TrimSpace(output) == ""
+	return strings.TrimSpace(output) == emptyString
 }
 
 // checkDiskEncryption checks if disk encryption is enabled
 func (c *LinuxCollector) checkDiskEncryption() bool {
+	_ = c
 	// Check for LUKS encrypted devices
 	output, err := runCommand("lsblk", "-f")
 	if err != nil {
@@ -232,6 +236,7 @@ func (c *LinuxCollector) checkDiskEncryption() bool {
 
 // checkScreenLock checks if screen lock is configured
 func (c *LinuxCollector) checkScreenLock() bool {
+	_ = c
 	// Check GNOME settings
 	if output, err := runCommand("gsettings", "get", "org.gnome.desktop.screensaver", "lock-enabled"); err == nil {
 		return strings.Contains(strings.ToLower(output), trueKeyword)
@@ -248,6 +253,7 @@ func (c *LinuxCollector) checkScreenLock() bool {
 
 // isOSSupported checks if the OS version is supported
 func (c *LinuxCollector) isOSSupported(osName string) bool {
+	_ = c
 	supportedDistros := []string{
 		"ubuntu", "debian", "centos", "rhel", "fedora",
 		"suse", "opensuse", "arch", "mint", "elementary",

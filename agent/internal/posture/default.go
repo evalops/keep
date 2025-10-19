@@ -6,9 +6,10 @@ import "runtime"
 type DefaultCollector struct{}
 
 // CollectPosture returns minimal posture information for unsupported platforms
-func (_ *DefaultCollector) CollectPosture() (*DevicePosture, error) {
+func (c *DefaultCollector) CollectPosture() (*DevicePosture, error) {
+	_ = c
 	posture := &DevicePosture{
-		OS: OperatingSystem{
+		OS: &OperatingSystem{
 			Name:      UnknownValue,
 			Version:   UnknownValue,
 			Build:     UnknownValue,
@@ -16,15 +17,18 @@ func (_ *DefaultCollector) CollectPosture() (*DevicePosture, error) {
 			Kernel:    UnknownValue,
 			Supported: false,
 		},
-		Firewall: FirewallStatus{
-			Enabled: false,
-			Rules:   DefaultRules,
+		Firewall: &FirewallStatus{
 			Service: UnknownService,
+			Ports:   nil,
+			Rules:   DefaultRules,
+			Enabled: false,
 		},
-		AntiVirus:     false,
-		SystemUpdate:  false,
-		DiskEncrypted: false,
-		ScreenLock:    false,
+		SecurityFeatureSet: SecurityFeatureSet{
+			AntiVirus:     false,
+			SystemUpdate:  false,
+			DiskEncrypted: false,
+			ScreenLock:    false,
+		},
 	}
 
 	// Calculate trust score (will be low due to unknown status)

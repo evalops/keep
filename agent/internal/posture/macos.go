@@ -5,27 +5,30 @@ import (
 	"strings"
 )
 
+const macOSDefaultRuleCount = 1
+
 // MacOSCollector collects device posture on macOS systems
 type MacOSCollector struct{}
 
 // CollectPosture collects device posture information on macOS
 func (c *MacOSCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
-		OS: OperatingSystem{
+		OS: &OperatingSystem{
 			Name: "macOS",
 			Arch: runtime.GOARCH,
 		},
+		Firewall: &FirewallStatus{},
 	}
 
 	// Collect OS information
-	if err := c.collectOSInfo(&posture.OS); err != nil {
+	if err := c.collectOSInfo(posture.OS); err != nil {
 		return nil, err
 	}
 
 	// Collect firewall status
-	if err := c.collectFirewallStatus(&posture.Firewall); err != nil {
+	if err := c.collectFirewallStatus(posture.Firewall); err != nil {
 		// Non-fatal error, continue with default values
-		posture.Firewall = FirewallStatus{Enabled: false, Service: UnknownService}
+		*posture.Firewall = FirewallStatus{Service: UnknownService}
 	}
 
 	// Collect other security posture information
@@ -69,9 +72,9 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 				// Extract version number
 				parts = strings.Fields(versionInfo)
 				if len(parts) >= minPartsTriple {
-					os.Name = strings.Join(parts[:2], spaceSeparator)
-					os.Version = parts[2]
-				} else if len(parts) >= 2 {
+					os.Name = strings.Join(parts[:keyValueParts], spaceSeparator)
+					os.Version = parts[versionPartIndex]
+				} else if len(parts) >= keyValueParts {
 					os.Version = parts[len(parts)-indexIncrement]
 				}
 			}
@@ -91,6 +94,7 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 
 // collectFirewallStatus checks macOS firewall status
 func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
+	_ = c
 	fw.Service = macOSFirewallService
 
 	// Check if firewall is enabled
@@ -104,7 +108,7 @@ func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
 
 	// Get firewall rules (simplified - macOS firewall is less rule-based)
 	if fw.Enabled {
-		fw.Rules = 1
+		fw.Rules = macOSDefaultRuleCount
 	}
 
 	return nil
@@ -112,6 +116,7 @@ func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
 
 // checkAntiVirus checks for antivirus software on macOS
 func (c *MacOSCollector) checkAntiVirus() bool {
+	_ = c
 	// Check for common macOS antivirus applications
 	antivirusApps := []string{
 		"/Applications/Bitdefender Virus Scanner.app",
@@ -147,6 +152,7 @@ func (c *MacOSCollector) checkAntiVirus() bool {
 
 // checkSystemUpdated checks if system updates are available
 func (c *MacOSCollector) checkSystemUpdated() bool {
+	_ = c
 	// Check for available updates
 	output, err := runCommand("softwareupdate", "-l")
 	if err != nil {
@@ -161,6 +167,7 @@ func (c *MacOSCollector) checkSystemUpdated() bool {
 
 // checkDiskEncryption checks if FileVault is enabled
 func (c *MacOSCollector) checkDiskEncryption() bool {
+	_ = c
 	output, err := runCommand("fdesetup", "status")
 	if err != nil {
 		return false
@@ -171,6 +178,7 @@ func (c *MacOSCollector) checkDiskEncryption() bool {
 
 // checkScreenLock checks if screen lock/password is required
 func (c *MacOSCollector) checkScreenLock() bool {
+	_ = c
 	// Check if password is required after screensaver
 	output, err := runCommand(defaultsCommand, readCommand, "com.apple.screensaver", macOSScreenPassword)
 	if err == nil && strings.Contains(output, macOSPasswordEnabled) {
@@ -185,8 +193,7 @@ func (c *MacOSCollector) checkScreenLock() bool {
 	}
 
 	// Check System Preferences security settings
-	output, err = runCommand(defaultsCommand, readCommand, "com.apple.screensaver", macOSScreenDelay)
-	if err == nil {
+	if _, err = runCommand(defaultsCommand, readCommand, "com.apple.screensaver", macOSScreenDelay); err == nil {
 		return true
 	}
 
@@ -195,13 +202,14 @@ func (c *MacOSCollector) checkScreenLock() bool {
 
 // isOSSupported checks if the macOS version is supported
 func (c *MacOSCollector) isOSSupported(version string) bool {
+	_ = c
 	if version == "" {
 		return false
 	}
 
 	// Parse major version (e.g., "12.6.1" -> 12)
 	parts := strings.Split(version, ".")
-	if len(parts) == 0 {
+	if len(parts) == initialCapacity {
 		return false
 	}
 
