@@ -56,8 +56,8 @@ type session struct {
 	Challenge   string    `json:"challenge"`
 	Code        string    `json:"-"`
 	ExpiresAt   time.Time `json:"expires_at"`
-	Attempts    int       `json:"attempts"`
 	MaxAttempts int       `json:"max_attempts"`
+	Attempts    int       `json:"attempts"`
 }
 
 // ChallengeRequest represents MFA challenge request
@@ -269,7 +269,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // healthHandler returns service health
-func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	sessionCount := len(s.sessions)
 	s.mu.RUnlock()
