@@ -1,11 +1,23 @@
 import os
 import time
-from typing import Optional
+from typing import Any, Callable, Optional, TypeVar, cast
 from urllib.parse import quote_plus
 
 import pytest
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+F = TypeVar("F", bound=Callable[..., object])
+
+
+def typed_fixture(*args: Any, **kwargs: Any) -> Callable[[F], F]:
+    """Typed veneer over pytest.fixture to keep mypy happy while preserving runtime behavior."""
+    fixture_factory = pytest.fixture(*args, **kwargs)
+
+    def decorator(func: F) -> F:
+        return cast(F, fixture_factory(func))
+
+    return decorator
 
 TRANSIENT_CODES = {
     "08000",
@@ -102,6 +114,6 @@ def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
             time.sleep(min(0.25 * attempt, 2.0))
 
 
-@pytest.fixture(scope="session", autouse=True)
+@typed_fixture(scope="session", autouse=True)
 def _ensure_database_ready() -> None:
     wait_for_database(resolve_dsn())

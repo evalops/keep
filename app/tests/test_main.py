@@ -1,16 +1,15 @@
 import os
 from typing import Any, Generator
 
-import pytest
-
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 
 from app.main import app  # noqa: E402
+from app.tests.conftest import typed_fixture
 
 TestClient = Any
 
 
-@pytest.fixture
+@typed_fixture
 def client() -> Generator[Any, None, None]:
     """Create a test client for the Flask app."""
     app.config["TESTING"] = True
