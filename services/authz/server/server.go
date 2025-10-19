@@ -272,7 +272,7 @@ func (s *Server) Start(ctx context.Context) error {
 	return shutdownErr
 }
 
-func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	health := map[string]interface{}{
 		"status":    "ok",
 		"tailscale": s.getTailscaleInfo(),
