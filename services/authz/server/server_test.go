@@ -13,6 +13,12 @@ import (
 	"tailscale.com/tsnet"
 )
 
+const (
+	testDeviceID       = "test-device"
+	testAllowPath      = "/v1/data/keep/allow"
+	testClientRemoteIP = "100.65.1.1:12345"
+)
+
 // TestServer_healthHandler tests the health endpoint
 func TestServer_healthHandler(t *testing.T) {
 	server := createTestServer(t)
@@ -69,7 +75,7 @@ func TestServer_verifyHandler(t *testing.T) {
 	t.Run("rejects invalid token", func(t *testing.T) {
 		reqBody := verifyRequest{
 			Token:    "invalid.jwt.token",
-			DeviceID: "test-device",
+			DeviceID: testDeviceID,
 			ClientIP: "192.168.1.1",
 		}
 		body, err := json.Marshal(reqBody)
@@ -147,16 +153,23 @@ func createTestServer(t *testing.T) *Server {
 
 // TestServer_envoyAuthHandler tests the Envoy auth handler
 func TestServer_envoyAuthHandler(t *testing.T) {
+	const (
+		testDeviceID       = "test-device"
+		testAllowPath      = "/v1/data/keep/allow"
+		testClientRemoteIP = "100.65.1.1:12345"
+	)
 	// Create mock OPA server
 	mockOPA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/data/keep/allow" && r.Method == http.MethodPost {
+		if r.URL.Path == testAllowPath && r.Method == http.MethodPost {
 			// Return "allow" decision for test
 			response := map[string]interface{}{
 				"result": map[string]interface{}{
 					"decision": "allow",
 				},
 			}
-			json.NewEncoder(w).Encode(response)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("Failed to encode OPA response: %v", err)
+			}
 		} else {
 			http.Error(w, "not found", http.StatusNotFound)
 		}
@@ -168,10 +181,12 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 		if strings.HasPrefix(r.URL.Path, "/v1/devices/") && r.Method == http.MethodGet {
 			// Return device info
 			device := map[string]interface{}{
-				"id":      "test-device",
+				"id":      testDeviceID,
 				"posture": "healthy",
 			}
-			json.NewEncoder(w).Encode(device)
+			if err := json.NewEncoder(w).Encode(device); err != nil {
+				t.Fatalf("Failed to encode device response: %v", err)
+			}
 		} else {
 			http.Error(w, "not found", http.StatusNotFound)
 		}
@@ -236,7 +251,7 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 					"http": map[string]interface{}{
 						"headers": map[string]string{
 							"authorization": "InvalidToken",
-							"x-device-id":   "test-device",
+							"x-device-id":   testDeviceID,
 						},
 					},
 				},
@@ -264,7 +279,7 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 					"http": map[string]interface{}{
 						"headers": map[string]string{
 							"authorization": "Bearer invalid.jwt.token",
-							"x-device-id":   "test-device",
+							"x-device-id":   testDeviceID,
 						},
 					},
 				},
@@ -294,7 +309,7 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 						"headers": map[string]string{
 							"authorization":   "Bearer invalid.jwt.token",
 							"x-forwarded-for": "192.168.1.100",
-							"x-device-id":     "test-device",
+							"x-device-id":     testDeviceID,
 						},
 					},
 				},
@@ -361,8 +376,10 @@ func TestServer_evaluateOPA(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockOPA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/v1/data/keep/allow" && r.Method == http.MethodPost {
-					json.NewEncoder(w).Encode(tc.opaResponse)
+				if r.URL.Path == testAllowPath && r.Method == http.MethodPost {
+					if err := json.NewEncoder(w).Encode(tc.opaResponse); err != nil {
+						t.Fatalf("Failed to encode OPA response: %v", err)
+					}
 				} else {
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -376,7 +393,7 @@ func TestServer_evaluateOPA(t *testing.T) {
 				"groups": []string{"admin"},
 			}
 
-			result, err := server.evaluateOPA(context.Background(), claims, "test-device", "192.168.1.1")
+			result, err := server.evaluateOPA(context.Background(), claims, testDeviceID, "192.168.1.1")
 
 			if tc.shouldError {
 				if err == nil {
@@ -417,7 +434,7 @@ func TestServer_lookupDevice(t *testing.T) {
 	t.Run("returns unknown posture when no inventory URL", func(t *testing.T) {
 		server := createTestServerWithMocks(t, "", "")
 
-		result := server.lookupDevice(context.Background(), "test-device")
+		result := server.lookupDevice(context.Background(), testDeviceID)
 
 		expected := map[string]any{
 			"id":      "test-device",
@@ -446,13 +463,15 @@ func TestServer_lookupDevice(t *testing.T) {
 
 	t.Run("returns device info for successful lookup", func(t *testing.T) {
 		expectedDevice := map[string]interface{}{
-			"id":      "test-device",
+			"id":      testDeviceID,
 			"posture": "healthy",
 		}
 
 		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.URL.Path, "test-device") {
-				json.NewEncoder(w).Encode(expectedDevice)
+			if strings.Contains(r.URL.Path, testDeviceID) {
+				if err := json.NewEncoder(w).Encode(expectedDevice); err != nil {
+					t.Fatalf("Failed to encode device response: %v", err)
+				}
 			} else {
 				http.Error(w, "not found", http.StatusNotFound)
 			}
@@ -464,7 +483,7 @@ func TestServer_lookupDevice(t *testing.T) {
 
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
 
-		result := server.lookupDevice(ctx, "test-device")
+		result := server.lookupDevice(ctx, testDeviceID)
 
 		if result["id"] != expectedDevice["id"] || result["posture"] != expectedDevice["posture"] {
 			t.Errorf("Expected device info %v, got %v", expectedDevice, result)
@@ -548,7 +567,7 @@ func TestServer_deviceCertHandler(t *testing.T) {
 
 	t.Run("rejects empty CSR", func(t *testing.T) {
 		reqBody := map[string]string{
-			"device_id": "test-device",
+			"device_id": testDeviceID,
 			"csr":       "",
 		}
 		body, err := json.Marshal(reqBody)
@@ -592,7 +611,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 
 	t.Run("returns false when no Tailscale server", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.RemoteAddr = "100.65.1.1:12345"
+		req.RemoteAddr = testClientRemoteIP
 
 		result := server.validateTailscaleAccess(req)
 
@@ -620,7 +639,7 @@ func TestServer_validateTailscaleAccess(t *testing.T) {
 		server.tsServer = &tsnet.Server{}
 
 		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		req.RemoteAddr = "100.65.1.1:12345" // Valid Tailscale IP
+		req.RemoteAddr = testClientRemoteIP // Valid Tailscale IP
 
 		result := server.validateTailscaleAccess(req)
 
