@@ -82,7 +82,7 @@ func (c *WindowsCollector) collectOSInfo(os *OperatingSystem) error {
 }
 
 // collectFirewallStatus checks Windows Defender Firewall status
-func (*WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
+func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	fw.Service = "Windows Defender Firewall"
 
 	// Check firewall state using netsh
@@ -113,7 +113,7 @@ func (*WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 }
 
 // checkAntiVirus checks Windows Defender and other antivirus software
-func (*WindowsCollector) checkAntiVirus() bool {
+func (_ *WindowsCollector) checkAntiVirus() bool {
 	// Check Windows Defender status
 	output, err := runCommand(powershellCmd, powershellFlag, "Get-MpComputerStatus | Select-Object AntivirusEnabled")
 	if err == nil && strings.Contains(strings.ToLower(output), "true") {
@@ -136,7 +136,7 @@ func (*WindowsCollector) checkAntiVirus() bool {
 }
 
 // checkSystemUpdated checks Windows Update status
-func (*WindowsCollector) checkSystemUpdated() bool {
+func (_ *WindowsCollector) checkSystemUpdated() bool {
 	// Check for pending updates using PowerShell
 	output, err := runCommand(powershellCmd, powershellFlag,
 		"Get-WUList -MicrosoftUpdate | Measure-Object | Select-Object -ExpandProperty Count")
@@ -155,7 +155,7 @@ func (*WindowsCollector) checkSystemUpdated() bool {
 }
 
 // checkDiskEncryption checks BitLocker status
-func (*WindowsCollector) checkDiskEncryption() bool {
+func (_ *WindowsCollector) checkDiskEncryption() bool {
 	// Check BitLocker status
 	output, err := runCommand("manage-bde", "-status")
 	if err != nil {
@@ -167,7 +167,7 @@ func (*WindowsCollector) checkDiskEncryption() bool {
 }
 
 // checkScreenLock checks screen lock/password policy
-func (*WindowsCollector) checkScreenLock() bool {
+func (_ *WindowsCollector) checkScreenLock() bool {
 	// Check screen saver settings
 	output, err := runCommand("reg", "query",
 		"HKEY_CURRENT_USER\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop",

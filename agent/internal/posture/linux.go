@@ -81,7 +81,7 @@ func (c *LinuxCollector) collectOSInfo(os *OperatingSystem) error {
 // collectFirewallStatus checks UFW and iptables status
 func (c *LinuxCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	// Check UFW first
-	if c.checkUFW(fw) {
+	if checkUFW(fw) {
 		return nil
 	}
 
@@ -90,7 +90,7 @@ func (c *LinuxCollector) collectFirewallStatus(fw *FirewallStatus) error {
 }
 
 // checkUFW checks Ubuntu UFW firewall status
-func (*LinuxCollector) checkUFW(fw *FirewallStatus) bool {
+func checkUFW(fw *FirewallStatus) bool {
 	output, err := runCommand("ufw", "status")
 	if err != nil {
 		return false
