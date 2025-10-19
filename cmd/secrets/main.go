@@ -11,15 +11,38 @@ import (
 	"github.com/EvalOps/keep/pkg/secrets"
 )
 
+const (
+	actionGet     = "get"
+	actionSet     = "set"
+	actionList    = "list"
+	actionMigrate = "migrate"
+	actionInit    = "init"
+
+	formatText = "text"
+	formatJSON = "json"
+
+	envSecretType   = "SECRET_MANAGER_TYPE"
+	envSecretRegion = "SECRET_MANAGER_REGION"
+	envSecretPrefix = "SECRET_MANAGER_PREFIX"
+
+	logPrefixFailCreate    = "Failed to create secret manager"
+	logPrefixFailGet       = "Failed to get secret"
+	logPrefixFailSet       = "Failed to set secret"
+	logPrefixFailDest      = "Failed to create destination manager"
+	logPrefixUnknownAction = "Unknown action"
+	logMissingKey          = "Key is required for get action"
+	logMissingKeyValue     = "Key and value are required for set action"
+)
+
 func main() {
 	var (
-		action     = flag.String("action", "get", "Action to perform: get, set, list, migrate")
+		action     = flag.String("action", actionGet, "Action to perform: get, set, list, migrate")
 		secretType = flag.String("type", "", "Secret manager type: env, ssm, vault, azure")
 		region     = flag.String("region", "", "AWS region for SSM")
 		prefix     = flag.String("prefix", "", "Secret prefix/namespace")
 		key        = flag.String("key", "", "Secret key")
 		value      = flag.String("value", "", "Secret value (for set action)")
-		format     = flag.String("format", "text", "Output format: text, json")
+		format     = flag.String("format", formatText, "Output format: text, json")
 		vaultAddr  = flag.String("vault-addr", "", "Vault server address")
 		vaultPath  = flag.String("vault-path", "", "Vault secret path")
 		azureURL   = flag.String("azure-url", "", "Azure Key Vault URL")
@@ -42,44 +65,44 @@ func main() {
 
 	// Override with environment variables if not specified
 	if cfg.Type == "" {
-		cfg.Type = os.Getenv("SECRET_MANAGER_TYPE")
+		cfg.Type = os.Getenv(envSecretType)
 	}
 	if cfg.Region == "" {
-		cfg.Region = os.Getenv("SECRET_MANAGER_REGION")
+		cfg.Region = os.Getenv(envSecretRegion)
 	}
 	if cfg.Prefix == "" {
-		cfg.Prefix = os.Getenv("SECRET_MANAGER_PREFIX")
+		cfg.Prefix = os.Getenv(envSecretPrefix)
 	}
 
 	manager, err := secrets.NewManager(cfg)
 	if err != nil {
-		log.Fatalf("Failed to create secret manager: %v", err)
+		log.Fatalf("%s: %v", logPrefixFailCreate, err)
 	}
 
 	switch *action {
-	case "get":
+	case actionGet:
 		if *key == "" {
-			log.Fatal("Key is required for get action")
+			log.Fatal(logMissingKey)
 		}
 		handleGet(ctx, manager, *key, *format)
 
-	case "set":
+	case actionSet:
 		if *key == "" || *value == "" {
-			log.Fatal("Key and value are required for set action")
+			log.Fatal(logMissingKeyValue)
 		}
 		handleSet(ctx, manager, *key, *value)
 
-	case "list":
+	case actionList:
 		handleList(ctx, manager, *format)
 
-	case "migrate":
+	case actionMigrate:
 		handleMigrate(ctx, cfg)
 
-	case "init":
+	case actionInit:
 		handleInit(*secretType)
 
 	default:
-		log.Fatalf("Unknown action: %s", *action)
+		log.Fatalf("%s: %s", logPrefixUnknownAction, *action)
 	}
 }
 
@@ -89,13 +112,7 @@ func handleGet(ctx context.Context, manager secrets.Manager, key, format string)
 		log.Fatalf("Failed to get secret %s: %v", key, err)
 	}
 
-	switch format {
-	case "json":
-		result := map[string]string{key: secretValue}
-		json.NewEncoder(os.Stdout).Encode(result)
-	default:
-		fmt.Println(secretValue)
-	}
+	writeOutput(format, map[string]string{key: secretValue}, func() { fmt.Println(secretValue) })
 }
 
 func handleSet(ctx context.Context, manager secrets.Manager, key, value string) {
@@ -123,15 +140,12 @@ func handleList(ctx context.Context, manager secrets.Manager, format string) {
 		}
 	}
 
-	switch format {
-	case "json":
-		json.NewEncoder(os.Stdout).Encode(results)
-	default:
+	writeOutput(format, results, func() {
 		fmt.Println("Available secrets:")
 		for key := range results {
 			fmt.Printf("  %s\n", key)
 		}
-	}
+	})
 }
 
 func handleMigrate(ctx context.Context, cfg secrets.Config) {
@@ -143,7 +157,7 @@ func handleMigrate(ctx context.Context, cfg secrets.Config) {
 	// Destination: configured manager
 	dest, err := secrets.NewManager(cfg)
 	if err != nil {
-		log.Fatalf("Failed to create destination manager: %v", err)
+		log.Fatalf("%s: %v", logPrefixFailDest, err)
 	}
 
 	// Common secrets to migrate
