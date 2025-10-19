@@ -43,7 +43,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				DiskEncrypted: true,
 				ScreenLock:    true,
 			},
-			expectedScore:  100,
+			expectedScore:  TestScoreHealthy,
 			expectedStatus: StatusHealthy,
 		},
 		{
@@ -56,7 +56,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				DiskEncrypted: true,
 				ScreenLock:    true,
 			},
-			expectedScore:  85,
+			expectedScore:  TestScoreCompliant,
 			expectedStatus: StatusHealthy,
 		},
 		{
@@ -69,7 +69,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				DiskEncrypted: true,
 				ScreenLock:    false,
 			},
-			expectedScore:  60,
+			expectedScore:  TestScoreWarning,
 			expectedStatus: StatusCompliant,
 		},
 		{
@@ -82,7 +82,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				DiskEncrypted: false,
 				ScreenLock:    true,
 			},
-			expectedScore:  30,
+			expectedScore:  TestScoreCritical,
 			expectedStatus: StatusCritical,
 		},
 		{

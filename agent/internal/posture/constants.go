@@ -37,6 +37,10 @@ const (
 	TrustThresholdHealthy   = 80
 	TrustThresholdCompliant = 60
 	TrustThresholdWarning   = 40
+	TestScoreHealthy        = 100
+	TestScoreCompliant      = 85
+	TestScoreWarning        = 60
+	TestScoreCritical       = 30
 	DefaultRules            = 0
 	RuleNamePrefix          = "Rule Name:"
 	MinWindowsVersion       = 10
