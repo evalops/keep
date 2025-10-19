@@ -44,6 +44,11 @@ const (
 	emptyString              = ""
 	contentTypeHeader        = "Content-Type"
 	applicationJSON          = "application/json"
+	serviceNameAuthz         = "authz"
+	serviceNameOPA           = "opa"
+	serviceNameMFA           = "mfa"
+	serviceNameInventory     = "inventory"
+	statusError              = "error"
 	errDecodeRequest         = "bad request"
 	errMissingMFAParams      = "missing MFA parameters"
 	errMethodNotAllowed      = "method not allowed"
@@ -451,7 +456,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 		return nil
 	})
 	if retryErr != nil {
-		telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), "error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), "error")
 		return "", retryErr
 	}
 	defer resp.Body.Close()
@@ -459,10 +464,10 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	if resp.StatusCode != http.StatusOK {
 		b, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 			return "", fmt.Errorf("opa error: failed to read body: %w", readErr)
 		}
-		telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		return "", fmt.Errorf("opa error: %s", string(b))
 	}
 
@@ -474,7 +479,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", err
 	}
-	telemetry.RecordDependencyRequest(ctx, "authz", "opa", "evaluate", time.Since(start), statusOK)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), statusOK)
 	return out.Result.Decision, nil
 }
 
@@ -560,31 +565,31 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		return nil
 	})
 	if retryErr != nil {
-		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), "error")
 		log.Printf("inventory request failed: %v", retryErr)
 		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "404")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), "404")
 		return map[string]any{"id": deviceID, "posture": statusUnregistered}
 	}
 	if resp.StatusCode != http.StatusOK {
 		b, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 			log.Printf("inventory error %d: failed to read body: %v", resp.StatusCode, readErr)
 			return map[string]any{"id": deviceID, "posture": statusUnknown}
 		}
-		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		log.Printf("inventory error %d: %s", resp.StatusCode, string(b))
 		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 
 	var device inventoryDevice
 	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
-		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "decode_error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), "decode_error")
 		log.Printf("inventory decode failed: %v", err)
 		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
@@ -604,7 +609,7 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		}
 	}
 
-	telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), statusOK)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), statusOK)
 	return map[string]any{
 		"id":          device.ID,
 		"posture":     postureData.Status,
@@ -946,13 +951,13 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 		return nil
 	})
 	if retryErr != nil {
-		telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), "error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), "error")
 		return false, retryErr
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		return false, fmt.Errorf("MFA service returned status %d", resp.StatusCode)
 	}
 
@@ -965,7 +970,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	if result["status"] != statusVerified {
 		status = "invalid"
 	}
-	telemetry.RecordDependencyRequest(ctx, "authz", "mfa", "verify", time.Since(start), status)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), status)
 
 	return result["status"] == statusVerified, nil
 }
