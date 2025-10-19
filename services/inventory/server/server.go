@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -158,7 +158,7 @@ func (s *Server) configureTLS() (*tls.Config, error) {
 
 	// Configure client certificate authentication if CA is provided
 	if s.cfg.ClientCA != "" {
-		caCert, err := io.ReadFile(s.cfg.ClientCA)
+		caCert, err := os.ReadFile(s.cfg.ClientCA)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read client CA certificate: %w", err)
 		}
@@ -216,7 +216,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // updateDevicePosture handles posture update requests
 func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, deviceIDParam)
-	if deviceID == "" {
+	if deviceID == emptyString {
 		http.Error(w, "device id required", http.StatusBadRequest)
 		return
 	}
