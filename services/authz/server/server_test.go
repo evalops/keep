@@ -483,8 +483,8 @@ func TestServer_lookupDevice(t *testing.T) {
 
 		result := server.lookupDevice(context.Background(), "")
 
-		if result["posture"] != "unknown" {
-			t.Errorf("Expected posture 'unknown' for empty device ID, got %v", result["posture"])
+		if result["posture"] != statusUnknown {
+			t.Errorf("Expected posture %q for empty device ID, got %v", statusUnknown, result["posture"])
 		}
 	})
 
@@ -501,8 +501,8 @@ func TestServer_lookupDevice(t *testing.T) {
 
 		result := server.lookupDevice(ctx, testDeviceID)
 
-		if result["posture"] != "unknown" {
-			t.Errorf("Expected posture 'unknown' for service error, got %v", result["posture"])
+		if result["posture"] != statusUnknown {
+			t.Errorf("Expected posture %q for service error, got %v", statusUnknown, result["posture"])
 		}
 	})
 }

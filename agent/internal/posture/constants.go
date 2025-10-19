@@ -3,10 +3,12 @@ package posture
 const (
 	UnknownValue         = "Unknown"
 	UnknownService       = "unknown"
+	emptyString          = ""
 	newline              = "\n"
 	colonSeparator       = ":"
 	spaceSeparator       = " "
 	minPartsTriple       = 3
+	keyValueParts        = 2
 	macOSVersionKey      = "System Version:"
 	macOSKernelKey       = "Kernel Version:"
 	macOSFirewallService = "pf"

@@ -70,7 +70,7 @@ func (p *DevicePosture) ToJSON() (string, error) {
 
 // CalculateTrustScore calculates an overall trust score based on posture
 func (p *DevicePosture) CalculateTrustScore() {
-	score := 0
+	score := DefaultRules
 
 	if p.OS.Supported {
 		score += TrustBonusOS
@@ -140,12 +140,12 @@ func parseKeyValue(text string) map[string]string {
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == emptyString || strings.HasPrefix(line, "#") {
 			continue
 		}
 
 		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
+		if len(parts) == keyValueParts {
 			key := strings.TrimSpace(parts[0])
 			value := strings.Trim(strings.TrimSpace(parts[1]), "\"")
 			result[key] = value
@@ -160,5 +160,5 @@ func parseInt(s string) int {
 	if val, err := strconv.Atoi(s); err == nil {
 		return val
 	}
-	return 0
+	return DefaultRules
 }
