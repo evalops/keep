@@ -216,7 +216,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // updateDevicePosture handles posture update requests
 func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, deviceIDParam)
-	if deviceID == emptyString {
+	if deviceID == "" {
 		http.Error(w, "device id required", http.StatusBadRequest)
 		return
 	}
