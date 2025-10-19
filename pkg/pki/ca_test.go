@@ -158,7 +158,15 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
-	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24)
+	const (
+		testDeviceCN   = "test-device"
+		testDeviceOrg  = "test-org"
+		testDeviceURI  = "spiffe://example.com/device/123"
+		testDeviceDNS  = "device.example.com"
+		testDeviceTTLH = time.Hour
+	)
+
+	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
@@ -171,12 +179,12 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 
 	t.Run("issues valid certificate", func(t *testing.T) {
 		subject := pkix.Name{
-			CommonName:   "test-device",
-			Organization: []string{"test-org"},
+			CommonName:   testDeviceCN,
+			Organization: []string{testDeviceOrg},
 		}
-		uris := []string{"spiffe://example.com/device/123"}
-		dnsNames := []string{"device.example.com"}
-		ttl := time.Hour
+		uris := []string{testDeviceURI}
+		dnsNames := []string{testDeviceDNS}
+		ttl := testDeviceTTLH
 
 		certPEM, err := ca.IssueCertificate(subject, uris, dnsNames, ttl, &priv.PublicKey)
 		if err != nil {
@@ -195,17 +203,17 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 		}
 
 		// Verify certificate properties
-		if cert.Subject.CommonName != "test-device" {
-			t.Errorf("Expected CommonName 'test-device', got %s", cert.Subject.CommonName)
+		if cert.Subject.CommonName != testDeviceCN {
+			t.Errorf("Expected CommonName %q, got %s", testDeviceCN, cert.Subject.CommonName)
 		}
-		if len(cert.Subject.Organization) == 0 || cert.Subject.Organization[0] != "test-org" {
-			t.Errorf("Expected Organization 'test-org', got %v", cert.Subject.Organization)
+		if len(cert.Subject.Organization) == 0 || cert.Subject.Organization[0] != testDeviceOrg {
+			t.Errorf("Expected Organization %q, got %v", testDeviceOrg, cert.Subject.Organization)
 		}
-		if len(cert.DNSNames) != 1 || cert.DNSNames[0] != "device.example.com" {
-			t.Errorf("Expected DNSNames [device.example.com], got %v", cert.DNSNames)
+		if len(cert.DNSNames) != 1 || cert.DNSNames[0] != testDeviceDNS {
+			t.Errorf("Expected DNSNames [%s], got %v", testDeviceDNS, cert.DNSNames)
 		}
-		if len(cert.URIs) != 1 || cert.URIs[0].String() != "spiffe://example.com/device/123" {
-			t.Errorf("Expected URIs [spiffe://example.com/device/123], got %v", cert.URIs)
+		if len(cert.URIs) != 1 || cert.URIs[0].String() != testDeviceURI {
+			t.Errorf("Expected URIs [%s], got %v", testDeviceURI, cert.URIs)
 		}
 
 		// Verify the certificate is signed by the CA
@@ -254,7 +262,7 @@ func TestCertificateAuthority_SignCSR(t *testing.T) {
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
-	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24)
+	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
