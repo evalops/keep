@@ -25,6 +25,7 @@ const (
 	defaultComponent      = "attestor-service"
 	statusHealthy         = "healthy"
 	slash                 = "/"
+	apiVersion            = "v1"
 	defaultHTTPTimeout    = 10 * time.Second
 	defaultSignalCapacity = 1
 	statusCodeThreshold   = 400
@@ -329,7 +330,7 @@ func (s *Service) obtainCertificate() error {
 		return err
 	}
 
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), "v1", "certs", "device")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), apiVersion, "certs", "device")
 	if err != nil {
 		return fmt.Errorf("build certificate endpoint: %w", err)
 	}
@@ -371,7 +372,7 @@ func (s *Service) obtainCertificate() error {
 
 // downloadCA downloads the root CA certificate
 func (s *Service) downloadCA() ([]byte, error) {
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, "/"), "v1", "certs", "ca")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), apiVersion, "certs", "ca")
 	if err != nil {
 		return nil, fmt.Errorf("build CA endpoint: %w", err)
 	}

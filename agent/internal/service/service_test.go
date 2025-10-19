@@ -378,7 +378,7 @@ func TestService_obtainCertificate(t *testing.T) {
 	})
 
 	t.Run("handles certificate request failure", func(t *testing.T) {
-		mockAuthz := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mockAuthz := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}))
 		defer mockAuthz.Close()

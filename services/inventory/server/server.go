@@ -16,7 +16,6 @@ import (
 	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-
 	// Register pgx driver for database/sql usage
 	_ "github.com/jackc/pgx/v5/stdlib"
 )

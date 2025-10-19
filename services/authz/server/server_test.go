@@ -17,6 +17,8 @@ const (
 	testDeviceID       = "test-device"
 	testAllowPath      = "/v1/data/keep/allow"
 	testClientRemoteIP = "100.65.1.1:12345"
+	resultKey          = "result"
+	decisionKey        = "decision"
 )
 
 // TestServer_healthHandler tests the health endpoint
@@ -153,8 +155,8 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 		if r.URL.Path == testAllowPath && r.Method == http.MethodPost {
 			// Return "allow" decision for test
 			response := map[string]interface{}{
-				"result": map[string]interface{}{
-					"decision": "allow",
+				resultKey: map[string]interface{}{
+					decisionKey: "allow",
 				},
 			}
 			if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -334,8 +336,8 @@ func TestServer_evaluateOPA(t *testing.T) {
 		{
 			name: "allow decision",
 			opaResponse: map[string]interface{}{
-				"result": map[string]interface{}{
-					"decision": "allow",
+				resultKey: map[string]interface{}{
+					decisionKey: "allow",
 				},
 			},
 			expectedResult: "allow",
@@ -344,8 +346,8 @@ func TestServer_evaluateOPA(t *testing.T) {
 		{
 			name: "deny decision",
 			opaResponse: map[string]interface{}{
-				"result": map[string]interface{}{
-					"decision": "deny",
+				resultKey: map[string]interface{}{
+					decisionKey: "deny",
 				},
 			},
 			expectedResult: "deny",
@@ -354,8 +356,8 @@ func TestServer_evaluateOPA(t *testing.T) {
 		{
 			name: "step-up decision",
 			opaResponse: map[string]interface{}{
-				"result": map[string]interface{}{
-					"decision": "step-up",
+				resultKey: map[string]interface{}{
+					decisionKey: "step-up",
 				},
 			},
 			expectedResult: "step-up",
