@@ -19,8 +19,8 @@ const (
 	testClientRemoteIP     = "100.65.1.1:12345"
 	resultKey              = "result"
 	decisionKey            = "decision"
-	testRejectsNonPOST     = testRejectsNonPOST
-	testRejectsInvalidJSON = testRejectsInvalidJSON
+	testRejectsNonPOST     = "rejects non-POST methods"
+	testRejectsInvalidJSON = "rejects invalid JSON"
 )
 
 // TestServer_healthHandler tests the health endpoint
