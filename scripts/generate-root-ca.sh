@@ -14,7 +14,7 @@ cd "$CERTS_DIR"
 # Generate CA private key
 if [ ! -f "${CA_NAME}-key.pem" ]; then
     echo "Generating CA private key..."
-    openssl genpkey -algorithm EC -pkcs8 -out "${CA_NAME}-key.pem" \
+    openssl genpkey -algorithm EC -out "${CA_NAME}-key.pem" \
         -pkeyopt ec_paramgen_curve:P-256
     chmod 600 "${CA_NAME}-key.pem"
 fi

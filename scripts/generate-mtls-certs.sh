@@ -15,7 +15,7 @@ cd "$CERTS_DIR"
 # Generate CA private key
 if [ ! -f "${CA_NAME}.key" ]; then
     echo "Generating CA private key..."
-    openssl genpkey -algorithm RSA -out "${CA_NAME}.key" -pkcs8 -pass pass:changeme
+    openssl genpkey -algorithm RSA -out "${CA_NAME}.key" -pass pass:changeme
 fi
 
 # Generate CA certificate
@@ -29,7 +29,7 @@ fi
 # Generate server private key
 if [ ! -f "${SERVER_NAME}.key" ]; then
     echo "Generating inventory server private key..."
-    openssl genpkey -algorithm RSA -out "${SERVER_NAME}.key" -pkcs8
+    openssl genpkey -algorithm RSA -out "${SERVER_NAME}.key"
 fi
 
 # Generate server certificate signing request
@@ -59,7 +59,7 @@ EOF
 # Generate client private key
 if [ ! -f "${CLIENT_NAME}.key" ]; then
     echo "Generating authz client private key..."
-    openssl genpkey -algorithm RSA -out "${CLIENT_NAME}.key" -pkcs8
+    openssl genpkey -algorithm RSA -out "${CLIENT_NAME}.key"
 fi
 
 # Generate client certificate signing request
