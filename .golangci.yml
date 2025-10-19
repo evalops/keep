@@ -137,6 +137,12 @@ issues:
         - errcheck
       text: "Error return value of.*not checked"
     
+    # Allow log.Fatal in CLI command functions
+    - path: "cmd/.*main\\.go"
+      linters:
+        - revive
+      text: "calls to log.Fatalf only in main"
+    
     # Allow higher complexity in server initialization functions
     - path: "services/.*/server\\.go"
       linters:

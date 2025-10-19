@@ -16,7 +16,11 @@ import (
 	"github.com/EvalOps/keep/agent/internal/posture"
 )
 
-const testDeviceID = "test-device"
+const (
+	testDeviceID    = "test-device"
+	initialCapacity = 0
+	pidFileMode     = 0o600
+)
 
 // mockPostureCollector implements the posture.Collector interface for testing
 type mockPostureCollector struct {
@@ -430,7 +434,7 @@ func TestService_writePIDFile(t *testing.T) {
 		t.Fatalf("Failed to read PID file: %v", err)
 	}
 
-	if len(content) == 0 {
+	if len(content) == initialCapacity {
 		t.Error("PID file is empty")
 	}
 }
@@ -441,7 +445,7 @@ func TestService_removePIDFile(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "test.pid")
 
 	// Create PID file
-	err := os.WriteFile(pidFile, []byte("12345\n"), 0o600)
+	err := os.WriteFile(pidFile, []byte("12345\n"), pidFileMode)
 	if err != nil {
 		t.Fatalf("Failed to create test PID file: %v", err)
 	}

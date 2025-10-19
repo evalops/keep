@@ -81,7 +81,7 @@ func main() {
 
 	switch *action {
 	case actionGet:
-		if *key == "" {
+		if *key == emptyString {
 			log.Fatal(logMissingKey)
 		}
 		handleGet(ctx, manager, *key, *format)

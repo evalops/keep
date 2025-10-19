@@ -329,7 +329,7 @@ func (s *Service) obtainCertificate() error {
 		return err
 	}
 
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, "/"), "v1", "certs", "device")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), "v1", "certs", "device")
 	if err != nil {
 		return fmt.Errorf("build certificate endpoint: %w", err)
 	}
