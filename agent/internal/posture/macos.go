@@ -54,14 +54,14 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 
 		if strings.HasPrefix(line, macOSVersionKey) {
 			parts := strings.SplitN(line, colonSeparator, keyValueParts)
-			if len(parts) == 2 {
+			if len(parts) == keyValueParts {
 				versionInfo := strings.TrimSpace(parts[1])
 				// Parse "macOS Monterey 12.6.1 (21G217)"
 				if strings.Contains(versionInfo, "(") {
 					buildStart := strings.LastIndex(versionInfo, "(")
 					buildEnd := strings.LastIndex(versionInfo, ")")
-					if buildStart != -1 && buildEnd != -1 {
-						os.Build = versionInfo[buildStart+1 : buildEnd]
+					if buildStart != notFoundIndex && buildEnd != notFoundIndex {
+						os.Build = versionInfo[buildStart+indexIncrement : buildEnd]
 						versionInfo = strings.TrimSpace(versionInfo[:buildStart])
 					}
 				}
@@ -72,12 +72,12 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 					os.Name = strings.Join(parts[:2], spaceSeparator)
 					os.Version = parts[2]
 				} else if len(parts) >= 2 {
-					os.Version = parts[len(parts)-1]
+					os.Version = parts[len(parts)-indexIncrement]
 				}
 			}
 		} else if strings.HasPrefix(line, macOSKernelKey) {
 			parts := strings.SplitN(line, colonSeparator, keyValueParts)
-			if len(parts) == 2 {
+			if len(parts) == keyValueParts {
 				os.Kernel = strings.TrimSpace(parts[1])
 			}
 		}
@@ -94,7 +94,7 @@ func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	fw.Service = macOSFirewallService
 
 	// Check if firewall is enabled
-	output, err := runCommand("defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate")
+	output, err := runCommand(defaultsCommand, "read", "/Library/Preferences/com.apple.alf", "globalstate")
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (c *MacOSCollector) checkDiskEncryption() bool {
 // checkScreenLock checks if screen lock/password is required
 func (c *MacOSCollector) checkScreenLock() bool {
 	// Check if password is required after screensaver
-	output, err := runCommand("defaults", "read", "com.apple.screensaver", macOSScreenPassword)
+	output, err := runCommand(defaultsCommand, "read", "com.apple.screensaver", macOSScreenPassword)
 	if err == nil && strings.Contains(output, macOSPasswordEnabled) {
 		return true
 	}
@@ -185,7 +185,7 @@ func (c *MacOSCollector) checkScreenLock() bool {
 	}
 
 	// Check System Preferences security settings
-	output, err = runCommand("defaults", "read", "com.apple.screensaver", macOSScreenDelay)
+	output, err = runCommand(defaultsCommand, "read", "com.apple.screensaver", macOSScreenDelay)
 	if err == nil {
 		return true
 	}

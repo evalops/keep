@@ -43,4 +43,8 @@ const (
 	MinMacOSVersion         = 12
 	MinFirewallRules        = 3
 	initialCapacity         = 0
+	indexIncrement          = 1
+	notFoundIndex           = -1
+	versionPartIndex        = 2
+	defaultsCommand         = "defaults"
 )
