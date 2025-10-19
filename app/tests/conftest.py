@@ -19,6 +19,7 @@ def typed_fixture(*args: Any, **kwargs: Any) -> Callable[[F], F]:
 
     return decorator
 
+
 TRANSIENT_CODES = {
     "08000",
     "08001",
