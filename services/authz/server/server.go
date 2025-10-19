@@ -64,6 +64,9 @@ const (
 	errInvalidPEM            = "invalid pem"
 	errMissingToken          = "missing token"
 	errInvalidTokenFormat    = "invalid token format"
+	errUnauthorized          = "unauthorized"
+	errInternalError         = "internal error"
+	errForbidden             = "forbidden"
 	
 	// Tailscale network constants
 	tailscaleIP1   = 100
@@ -312,14 +315,14 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := token.VerifyGoogleJWT(r.Context(), req.Token, s.cfg.GoogleClientID)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, errUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	decision, err := s.evaluateOPA(r.Context(), claims, req.DeviceID, req.ClientIP)
 	if err != nil {
 		log.Printf("OPA eval error: %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		http.Error(w, errInternalError, http.StatusInternalServerError)
 		return
 	}
 
@@ -356,14 +359,14 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 	claims, err := s.validateBearerToken(r.Context(), authHeader)
 	if err != nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, errUnauthorized, http.StatusUnauthorized)
 		return
 	}
 
 	decision, err := s.evaluateOPA(r.Context(), claims, deviceID, clientIP)
 	if err != nil {
 		log.Printf("OPA eval error: %v", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		http.Error(w, errInternalError, http.StatusInternalServerError)
 		return
 	}
 
@@ -390,7 +393,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("failed to encode envoy auth response: %v", err)
 		}
 	default:
-		http.Error(w, "forbidden", http.StatusForbidden)
+		http.Error(w, errForbidden, http.StatusForbidden)
 	}
 }
 
