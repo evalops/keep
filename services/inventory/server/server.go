@@ -96,7 +96,7 @@ func NewServer(cfg Config) (*Server, error) {
 		r.Route("/devices", func(r chi.Router) {
 			r.Get("/", s.listDevices)
 			r.Post("/", s.registerDevice)
-			r.Get("/{deviceID}", s.getDeviceHandler)
+			r.Get("/{deviceID}", s.deviceDetails)
 			r.Put("/{deviceID}", s.updateDevice)
 			r.Post("/{deviceID}/posture", s.updateDevicePosture)
 		})
@@ -295,7 +295,7 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) getDeviceHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) deviceDetails(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, deviceIDParam)
 	var d Device
 	if err := s.db.QueryRow(`SELECT id, public_key, posture, registered_at, last_updated FROM devices WHERE id=$1`, id).Scan(&d.ID, &d.PublicKey, &d.Posture, &d.Registered, &d.LastUpdated); err != nil {
