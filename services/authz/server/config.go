@@ -14,7 +14,6 @@ type Config struct {
 	InventoryClientCert string // Client certificate for mTLS to inventory service
 	InventoryClientKey  string // Client private key for mTLS to inventory service
 	InventoryCA         string // CA certificate for inventory service validation
-	DeviceCertHours     time.Duration
 	TailscaleAuthKey    string
 	TailscaleHostname   string
 	TailscaleListenAddr string
@@ -22,9 +21,10 @@ type Config struct {
 	TailscaleTailnet    string
 	MFAServiceURL       string
 	TelemetryEndpoint   string
-	TelemetryInsecure   bool
 	TelemetryEnv        string
+	DeviceCertHours     time.Duration
 	RequestTimeout      time.Duration
-	RetryMaxAttempts    int
 	RetryMaxElapsed     time.Duration
+	RetryMaxAttempts    int
+	TelemetryInsecure   bool
 }

@@ -32,71 +32,79 @@ import (
 )
 
 const (
-	defaultClientTimeout     = 5 * time.Second
-	defaultInventoryTimeout  = 3 * time.Second
-	defaultReadHeaderTimeout = 10 * time.Second
-	defaultReadTimeout       = 30 * time.Second
-	defaultWriteTimeout      = 30 * time.Second
-	defaultIdleTimeout       = 60 * time.Second
-	defaultInitialInterval   = 200 * time.Millisecond
-	defaultRetryMultiplier   = 1.5
-	defaultMaxInterval       = 2 * time.Second
-	emptyString              = ""
-	contentTypeHeader        = "Content-Type"
-	applicationJSON          = "application/json"
-	applicationPEM           = "application/x-pem-file"
-	serviceNameAuthz         = "authz"
-	serviceNameOPA           = "opa"
-	serviceNameMFA           = "mfa"
-	serviceNameInventory     = "inventory"
-	statusError              = "error"
-	operationEvaluate        = "evaluate"
-	operationLookup          = "lookup"
-	operationVerify          = "verify"
-	fieldID                  = "id"
-	errDecodeRequest         = "bad request"
-	errMissingMFAParams      = "missing MFA parameters"
-	errMethodNotAllowed      = "method not allowed"
+	defaultClientTimeout      = 5 * time.Second
+	defaultInventoryTimeout   = 3 * time.Second
+	defaultReadHeaderTimeout  = 10 * time.Second
+	defaultReadTimeout        = 30 * time.Second
+	defaultWriteTimeout       = 30 * time.Second
+	defaultIdleTimeout        = 60 * time.Second
+	defaultInitialInterval    = 200 * time.Millisecond
+	defaultRetryMultiplier    = 1.5
+	defaultMaxInterval        = 2 * time.Second
+	emptyString               = ""
+	contentTypeHeader         = "Content-Type"
+	applicationJSON           = "application/json"
+	applicationPEM            = "application/x-pem-file"
+	serviceNameAuthz          = "authz"
+	serviceNameOPA            = "opa"
+	serviceNameMFA            = "mfa"
+	serviceNameInventory      = "inventory"
+	statusError               = "error"
+	statusInvalid             = "invalid"
+	zeroTrustScore            = 0
+	operationEvaluate         = "evaluate"
+	operationLookup           = "lookup"
+	operationVerify           = "verify"
+	fieldID                   = "id"
+	fieldStatus               = "status"
+	fieldPosture              = "posture"
+	fieldTrustScore           = "trust_score"
+	formatDecimal             = "%d"
+	errDecodeRequest          = "bad request"
+	errMissingMFAParams       = "missing MFA parameters"
+	errMethodNotAllowed       = "method not allowed"
 	errGoogleClientIDRequired = "Google client ID is required"
-	errRootCACertRequired    = "root CA certificate path is required (must be provisioned externally)"
-	errRootCAKeyRequired     = "root CA private key path is required (must be provisioned externally)"
-	errServerAlreadyStarted  = "server already started"
-	errInvalidPEM            = "invalid pem"
-	errMissingToken          = "missing token"
-	errInvalidTokenFormat    = "invalid token format"
-	errUnauthorized          = "unauthorized"
-	errInternalError         = "internal error"
-	errForbidden             = "forbidden"
-	
+	errRootCACertRequired     = "root CA certificate path is required (must be provisioned externally)"
+	errRootCAKeyRequired      = "root CA private key path is required (must be provisioned externally)"
+	errServerAlreadyStarted   = "server already started"
+	errInvalidPEM             = "invalid pem"
+	errMissingToken           = "missing token"
+	errInvalidTokenFormat     = "invalid token format"
+	errUnauthorized           = "unauthorized"
+	errInternalError          = "internal error"
+	errForbidden              = "forbidden"
+
 	// Tailscale network constants
-	tailscaleIP1   = 100
-	tailscaleIP2   = 64
-	tailscaleIP3   = 0
-	tailscaleIP4   = 0
-	tailscaleCIDR  = 10
-	ipv4Bits       = 32
-	
+	tailscaleIP1  = 100
+	tailscaleIP2  = 64
+	tailscaleIP3  = 0
+	tailscaleIP4  = 0
+	tailscaleCIDR = 10
+	ipv4Bits      = 32
+
 	// HTTP status code constants
-	httpServerError     = 500
-	httpNotFound        = 404
+	httpServerError      = 500
+	httpNotFound         = 404
 	tailscaleDefaultPort = ":8444"
 )
 
 // Server implements the authorization service with OPA policy evaluation
 type Server struct {
-	cfg        Config
+	cfg        *Config
+	retryCfg   *retry.Config
 	httpSrv    *http.Server
-	ca         *pki.CertificateAuthority
+	tsHTTP     *http.Server
 	client     *http.Client
 	invClient  *http.Client
-	mu         sync.Mutex
-	started    bool
-	useTLS     bool
-	rootCAPEM  []byte
+	ca         *pki.CertificateAuthority
 	tsServer   *tsnet.Server
 	tsListener net.Listener
-	tsHTTP     *http.Server
-	retryCfg   retry.Config
+	rootCAPEM  []byte
+	mu         sync.Mutex
+	state      struct {
+		started bool
+		useTLS  bool
+	}
 }
 
 func New(cfg Config) (*Server, error) {
@@ -110,7 +118,7 @@ func New(cfg Config) (*Server, error) {
 		log.Printf("telemetry init failed: %v", err)
 	}
 
-	if cfg.GoogleClientID == "" {
+	if cfg.GoogleClientID == emptyString {
 		return nil, errors.New(errGoogleClientIDRequired)
 	}
 
@@ -148,19 +156,21 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("setup tailscale: %w", err)
 	}
 
+	cfgCopy := cfg
+	retryCfgCopy := retryCfg
 	s := &Server{
-		cfg:        cfg,
+		cfg:        &cfgCopy,
 		ca:         ca,
 		client:     client,
 		invClient:  invClient,
 		tsServer:   tsSrv,
 		tsListener: tailscaleListener,
-		retryCfg:   retryCfg,
+		retryCfg:   &retryCfgCopy,
 	}
 
 	r := s.setupRouter()
 
-	if err := s.setupHTTPServer(cfg, r, ca); err != nil {
+	if err := s.setupHTTPServer(*s.cfg, r, ca); err != nil {
 		return nil, fmt.Errorf("setup HTTP server: %w", err)
 	}
 
@@ -182,17 +192,17 @@ func New(cfg Config) (*Server, error) {
 
 func (s *Server) Start(ctx context.Context) error {
 	s.mu.Lock()
-	if s.started {
+	if s.state.started {
 		s.mu.Unlock()
 		return errors.New(errServerAlreadyStarted)
 	}
-	s.started = true
+	s.state.started = true
 	s.mu.Unlock()
 
 	go func() {
 		var err error
-		if s.useTLS {
-			err = s.httpSrv.ListenAndServeTLS("", "")
+		if s.state.useTLS {
+			err = s.httpSrv.ListenAndServeTLS(emptyString, emptyString)
 		} else {
 			err = s.httpSrv.ListenAndServe()
 		}
@@ -321,10 +331,10 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch decision {
 	case decisionAllow:
-		if deviceID != "" {
+		if deviceID != emptyString {
 			w.Header().Set("x-device-id", deviceID)
 		}
-		if subject != "" {
+		if subject != emptyString {
 			w.Header().Set("x-client-subject", subject)
 		}
 		w.WriteHeader(http.StatusOK)
@@ -371,7 +381,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 
 	start := time.Now()
 	var resp *http.Response
-	retryErr := retry.Do(ctx, s.retryCfg, func() error {
+	retryErr := retry.Do(ctx, *s.retryCfg, func() error {
 		r, err := s.client.Do(req)
 		if err != nil {
 			return err
@@ -384,19 +394,19 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 		return nil
 	})
 	if retryErr != nil {
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), "error")
-		return "", retryErr
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, operationEvaluate, time.Since(start), statusError)
+		return emptyString, retryErr
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
-			return "", fmt.Errorf("opa error: failed to read body: %w", readErr)
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, operationEvaluate, time.Since(start), fmt.Sprintf(formatDecimal, resp.StatusCode))
+			return emptyString, fmt.Errorf("opa error: failed to read body: %w", readErr)
 		}
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
-		return "", fmt.Errorf("opa error: %s", string(b))
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, operationEvaluate, time.Since(start), fmt.Sprintf(formatDecimal, resp.StatusCode))
+		return emptyString, fmt.Errorf("opa error: %s", string(b))
 	}
 
 	var out struct {
@@ -405,9 +415,9 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 		} `json:"result"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", err
+		return emptyString, err
 	}
-	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, "evaluate", time.Since(start), statusOK)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameOPA, operationEvaluate, time.Since(start), statusOK)
 	return out.Result.Decision, nil
 }
 
@@ -454,8 +464,8 @@ func extractDeviceContext(headers map[string]string) (deviceID, subject string) 
 }
 
 func parseXFCC(xfcc string) string {
-	if xfcc == "" {
-		return ""
+	if xfcc == emptyString {
+		return emptyString
 	}
 	parts := strings.Split(xfcc, ";")
 	for _, p := range parts {
@@ -468,19 +478,19 @@ func parseXFCC(xfcc string) string {
 }
 
 func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]any {
-	if deviceID == "" || s.cfg.InventoryAPI == "" {
-		return map[string]any{"id": deviceID, "posture": statusUnknown}
+	if deviceID == emptyString || s.cfg.InventoryAPI == emptyString {
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/v1/devices/%s", s.cfg.InventoryAPI, deviceID), nil)
 	if err != nil {
 		log.Printf("inventory request build failed: %v", err)
-		return map[string]any{"id": deviceID, "posture": statusUnknown}
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 	}
 
 	start := time.Now()
 	var resp *http.Response
-	retryErr := retry.Do(ctx, s.retryCfg, func() error {
+	retryErr := retry.Do(ctx, *s.retryCfg, func() error {
 		r, err := s.invClient.Do(req)
 		if err != nil {
 			return err
@@ -493,36 +503,36 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		return nil
 	})
 	if retryErr != nil {
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), "error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, operationLookup, time.Since(start), statusError)
 		log.Printf("inventory request failed: %v", retryErr)
-		return map[string]any{"id": deviceID, "posture": statusUnknown}
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), "404")
-		return map[string]any{"id": deviceID, "posture": statusUnregistered}
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, operationLookup, time.Since(start), fmt.Sprintf(formatDecimal, http.StatusNotFound))
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnregistered}
 	}
 	if resp.StatusCode != http.StatusOK {
 		b, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
-			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, operationLookup, time.Since(start), fmt.Sprintf(formatDecimal, resp.StatusCode))
 			log.Printf("inventory error %d: failed to read body: %v", resp.StatusCode, readErr)
-			return map[string]any{"id": deviceID, "posture": statusUnknown}
+			return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 		}
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, operationLookup, time.Since(start), fmt.Sprintf(formatDecimal, resp.StatusCode))
 		log.Printf("inventory error %d: %s", resp.StatusCode, string(b))
-		return map[string]any{"id": deviceID, "posture": statusUnknown}
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 	}
 
 	var device inventoryDevice
 	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), "decode_error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, operationLookup, time.Since(start), "decode_error")
 		log.Printf("inventory decode failed: %v", err)
-		return map[string]any{"id": deviceID, "posture": statusUnknown}
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 	}
 
-	if device.Posture == "" {
+	if device.Posture == emptyString {
 		device.Posture = statusUnknown
 	}
 
@@ -531,17 +541,17 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 	if err := json.Unmarshal([]byte(device.Posture), &postureData); err != nil {
 		// Fallback for non-JSON posture data
 		return map[string]any{
-			"id":          device.ID,
-			"posture":     device.Posture,
-			"trust_score": 0,
+			fieldID:         device.ID,
+			fieldPosture:    device.Posture,
+			fieldTrustScore: zeroTrustScore,
 		}
 	}
 
-	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, "lookup", time.Since(start), statusOK)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameInventory, operationLookup, time.Since(start), statusOK)
 	return map[string]any{
-		"id":          device.ID,
-		"posture":     postureData.Status,
-		"trust_score": postureData.TrustScore,
+		fieldID:         device.ID,
+		fieldPosture:    postureData.Status,
+		fieldTrustScore: postureData.TrustScore,
 	}
 }
 
@@ -555,11 +565,11 @@ func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errDecodeRequest, http.StatusBadRequest)
 		return
 	}
-	if strings.TrimSpace(req.DeviceID) == "" {
+	if strings.TrimSpace(req.DeviceID) == emptyString {
 		http.Error(w, "device id required", http.StatusBadRequest)
 		return
 	}
-	if strings.TrimSpace(req.CSR) == "" {
+	if strings.TrimSpace(req.CSR) == emptyString {
 		http.Error(w, "csr required", http.StatusBadRequest)
 		return
 	}
@@ -617,7 +627,7 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 	}
 
 	// Configure client certificate authentication if provided
-	if cfg.InventoryClientCert != "" && cfg.InventoryClientKey != "" {
+	if cfg.InventoryClientCert != emptyString && cfg.InventoryClientKey != emptyString {
 		cert, err := tls.LoadX509KeyPair(cfg.InventoryClientCert, cfg.InventoryClientKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client certificate: %w", err)
@@ -628,7 +638,7 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 	}
 
 	// Configure server certificate validation if CA is provided
-	if cfg.InventoryCA != "" {
+	if cfg.InventoryCA != emptyString {
 		caCert, err := os.ReadFile(cfg.InventoryCA)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read inventory CA certificate: %w", err)
@@ -652,7 +662,7 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 // setupTailscale configures and initializes the Tailscale tsnet server
 func setupTailscale(cfg Config) (*tsnet.Server, net.Listener, error) {
 	// If no Tailscale auth key is provided, skip Tailscale setup
-	if cfg.TailscaleAuthKey == "" {
+	if cfg.TailscaleAuthKey == emptyString {
 		log.Println("No Tailscale auth key provided, skipping Tailscale setup")
 		return nil, nil, nil
 	}
@@ -664,7 +674,7 @@ func setupTailscale(cfg Config) (*tsnet.Server, net.Listener, error) {
 		Hostname: cfg.TailscaleHostname,
 	}
 
-	if cfg.TailscaleHostname == "" {
+	if cfg.TailscaleHostname == emptyString {
 		tsServer.Hostname = defaultAuthzHostname
 	}
 
@@ -676,7 +686,7 @@ func setupTailscale(cfg Config) (*tsnet.Server, net.Listener, error) {
 		return nil, nil, fmt.Errorf("failed to create Tailscale listener: %w", err)
 	}
 
-	if cfg.TailscaleListenAddr == "" {
+	if cfg.TailscaleListenAddr == emptyString {
 		listener, err = tsServer.Listen("tcp", tailscaleDefaultPort) // Default port for Tailscale
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create Tailscale listener on default port: %w", err)
@@ -696,7 +706,7 @@ func (s *Server) getTailscaleInfo() map[string]interface{} {
 
 	if s.tsServer != nil {
 		info["hostname"] = s.cfg.TailscaleHostname
-		if s.cfg.TailscaleHostname == "" {
+		if s.cfg.TailscaleHostname == emptyString {
 			info["hostname"] = "keep-authz"
 		}
 
@@ -716,7 +726,7 @@ func (s *Server) validateTailscaleAccess(r *http.Request) bool {
 
 	// Get the remote address from the request
 	remoteAddr := r.RemoteAddr
-	if remoteAddr == "" {
+	if remoteAddr == emptyString {
 		return false
 	}
 
@@ -777,7 +787,7 @@ func (*Server) loggingMiddleware(next http.Handler) http.Handler {
 		// Log request completion
 		duration := time.Since(start)
 		clientIP := r.Header.Get("X-Forwarded-For")
-		if clientIP == "" {
+		if clientIP == emptyString {
 			clientIP = r.RemoteAddr
 		}
 
@@ -798,7 +808,7 @@ func (*Server) metricsMiddleware(next http.Handler) http.Handler {
 
 		// Record metrics
 		duration := time.Since(start)
-		statusCode := fmt.Sprintf("%d", ww.Status())
+		statusCode := fmt.Sprintf(formatDecimal, ww.Status())
 
 		metrics.RecordHTTPRequest("authz", r.Method, r.URL.Path, statusCode, duration)
 	})
@@ -814,7 +824,7 @@ func (s *Server) mfaVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.Header.Get("x-mfa-session")
 	code := r.Header.Get("x-mfa-code")
 
-	if sessionID == "" || code == "" {
+	if sessionID == emptyString || code == emptyString {
 		http.Error(w, errMissingMFAParams, http.StatusBadRequest)
 		return
 	}
@@ -853,7 +863,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	}
 
 	endpoint := strings.TrimSuffix(s.cfg.MFAServiceURL, "/")
-	if endpoint == "" {
+	if endpoint == emptyString {
 		endpoint = "http://mfa:8445"
 	}
 
@@ -865,7 +875,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 
 	start := time.Now()
 	var resp *http.Response
-	retryErr := retry.Do(ctx, s.retryCfg, func() error {
+	retryErr := retry.Do(ctx, *s.retryCfg, func() error {
 		r, err := s.client.Do(req)
 		if err != nil {
 			return err
@@ -878,13 +888,13 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 		return nil
 	})
 	if retryErr != nil {
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), "error")
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, operationVerify, time.Since(start), statusError)
 		return false, fmt.Errorf("MFA verification request failed: %w", retryErr)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
+		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, operationVerify, time.Since(start), fmt.Sprintf(formatDecimal, resp.StatusCode))
 		return false, fmt.Errorf("MFA service returned status %d", resp.StatusCode)
 	}
 
@@ -894,21 +904,21 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	}
 
 	status := statusOK
-	if result["status"] != statusVerified {
-		status = "invalid"
+	if result[fieldStatus] != statusVerified {
+		status = statusInvalid
 	}
-	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), status)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, operationVerify, time.Since(start), status)
 
-	return result["status"] == statusVerified, nil
+	return result[fieldStatus] == statusVerified, nil
 }
 
 // extractClientIP extracts the client IP from various possible headers
 func extractClientIP(headers map[string]string) string {
 	clientIP := headers["x-forwarded-for"]
-	if clientIP == "" {
+	if clientIP == emptyString {
 		clientIP = headers["x-envoy-external-address"]
 	}
-	if clientIP == "" {
+	if clientIP == emptyString {
 		clientIP = headers["x-real-ip"]
 	}
 	return clientIP
@@ -916,7 +926,7 @@ func extractClientIP(headers map[string]string) string {
 
 // validateBearerToken validates and parses a Bearer token from the Authorization header
 func (s *Server) validateBearerToken(ctx context.Context, authHeader string) (map[string]interface{}, error) {
-	if authHeader == "" {
+	if authHeader == emptyString {
 		return nil, errors.New(errMissingToken)
 	}
 
@@ -962,14 +972,14 @@ func (s *Server) setupRouter() chi.Router {
 			r.Get("/status", s.tailscaleStatusHandler)
 		})
 	})
-	
+
 	return r
 }
 
 // setupHTTPServer configures the main HTTP server with optional TLS
 func (s *Server) setupHTTPServer(cfg Config, handler http.Handler, ca *pki.CertificateAuthority) error {
 	useTLS := cfg.TLSCertPath != emptyString && cfg.TLSKeyPath != emptyString
-	
+
 	if useTLS {
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
 		if err != nil {
@@ -977,10 +987,10 @@ func (s *Server) setupHTTPServer(cfg Config, handler http.Handler, ca *pki.Certi
 		}
 
 		clientCAs := x509.NewCertPool()
-		if cfg.RootCAPath != "" {
-			pemBytes, err := os.ReadFile(cfg.RootCAPath)
-			if err != nil {
-				return fmt.Errorf("load root ca: %w", err)
+		if cfg.RootCAPath != emptyString {
+			pemBytes, readErr := os.ReadFile(cfg.RootCAPath)
+			if readErr != nil {
+				return fmt.Errorf("load root ca: %w", readErr)
 			}
 			if !clientCAs.AppendCertsFromPEM(pemBytes) {
 				return errors.New("failed to parse client CA")
@@ -1006,7 +1016,7 @@ func (s *Server) setupHTTPServer(cfg Config, handler http.Handler, ca *pki.Certi
 				MinVersion:   tls.VersionTLS13,
 			},
 		}
-		s.useTLS = true
+		s.state.useTLS = true
 		s.rootCAPEM = rootCAPEM
 	} else {
 		s.httpSrv = &http.Server{
@@ -1023,7 +1033,7 @@ func (s *Server) setupHTTPServer(cfg Config, handler http.Handler, ca *pki.Certi
 			return fmt.Errorf("read ca pem: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 

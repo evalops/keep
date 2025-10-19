@@ -308,7 +308,8 @@ func TestService_obtainCertificate(t *testing.T) {
 	t.Run("successful certificate request", func(t *testing.T) {
 		certRequests := 0
 		mockAuthz := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/v1/certs/device" && r.Method == http.MethodPost {
+			switch {
+			case r.URL.Path == "/v1/certs/device" && r.Method == http.MethodPost:
 				certRequests++
 
 				var req map[string]string
@@ -325,20 +326,16 @@ func TestService_obtainCertificate(t *testing.T) {
 					t.Error("Expected CSR, got empty string")
 				}
 
-				// Return mock certificate
-				response := certResponse{
-					Certificate: "-----BEGIN CERTIFICATE-----\nMOCK_CERT_DATA\n-----END CERTIFICATE-----",
-				}
+				response := certResponse{Certificate: "-----BEGIN CERTIFICATE-----\nMOCK_CERT_DATA\n-----END CERTIFICATE-----"}
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("Failed to encode certificate response: %v", err)
 				}
-			} else if r.URL.Path == "/v1/certs/ca" && r.Method == http.MethodGet {
-				// Return mock CA certificate
+			case r.URL.Path == "/v1/certs/ca" && r.Method == http.MethodGet:
 				w.Header().Set("Content-Type", "application/x-pem-file")
-				if _, err := w.Write([]byte("-----BEGIN CERTIFICATE-----\nMOCK_CA_DATA\n-----END CERTIFICATE-----")); err != nil {
-					t.Fatalf("Failed to write CA certificate: %v", err)
+				if _, writeErr := w.Write([]byte("-----BEGIN CERTIFICATE-----\nMOCK_CA_DATA\n-----END CERTIFICATE-----")); writeErr != nil {
+					t.Fatalf("Failed to write CA certificate: %v", writeErr)
 				}
-			} else {
+			default:
 				http.Error(w, "not found", http.StatusNotFound)
 			}
 		}))
@@ -428,7 +425,7 @@ func TestService_writePIDFile(t *testing.T) {
 	}
 
 	// Verify PID file was created
-	if _, err := os.Stat(pidFile); os.IsNotExist(err) {
+	if _, statErr := os.Stat(pidFile); os.IsNotExist(statErr) {
 		t.Error("PID file was not created")
 	}
 

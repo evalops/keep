@@ -16,7 +16,7 @@ func TestBuildRSAPublicKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if pub.N.BitLen() == 0 || pub.E != rsaPublicExponent {
+	if pub.N.BitLen() == initialCapacity || pub.E != rsaPublicExponent {
 		t.Fatalf("unexpected key values: %#v", pub)
 	}
 }

@@ -132,12 +132,12 @@ func normalizeSecretName(name string) string {
 
 	// Remove leading/trailing dashes and ensure it starts with a letter or number
 	normalized = strings.Trim(normalized, string(dashRune))
-	if len(normalized) == 0 {
+	if len(normalized) == initialCapacity {
 		normalized = defaultSecretName
 	}
 
 	// Ensure it starts with alphanumeric
-	if normalized[0] == dashRune {
+	if normalized[initialCapacity] == dashRune {
 		normalized = "s" + normalized
 	}
 

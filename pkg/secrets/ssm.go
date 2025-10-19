@@ -97,8 +97,8 @@ func (m *SSMManager) GetSecrets(ctx context.Context, keys []string) (map[string]
 	}
 
 	// Check for missing parameters
-	if len(result.InvalidParameters) > 0 {
-		missing := make([]string, 0)
+	if len(result.InvalidParameters) > initialCapacity {
+		missing := make([]string, initialCapacity)
 		for _, invalidParam := range result.InvalidParameters {
 			if key, ok := paramToKey[invalidParam]; ok {
 				missing = append(missing, key)

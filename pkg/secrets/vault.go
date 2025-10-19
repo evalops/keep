@@ -224,8 +224,8 @@ func readSecretFile(path string) ([]byte, error) {
 
 func sanitizePath(path string) (string, error) {
 	trimmed := strings.TrimSpace(path)
-	if trimmed == "" {
-		return "", fmt.Errorf("path is empty")
+	if trimmed == emptyString {
+		return emptyString, fmt.Errorf("path is empty")
 	}
 
 	cleaned := filepath.Clean(trimmed)
@@ -234,7 +234,7 @@ func sanitizePath(path string) (string, error) {
 	}
 
 	if strings.Contains(cleaned, "..") {
-		return "", fmt.Errorf("path contains traversal: %s", path)
+		return emptyString, fmt.Errorf("path contains traversal: %s", path)
 	}
 
 	return cleaned, nil

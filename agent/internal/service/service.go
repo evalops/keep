@@ -31,13 +31,13 @@ const (
 	statusCodeThreshold   = 400
 	permOwnerReadWrite    = 0o600
 	permOwnerReadExecute  = 0o700
-	
+
 	// API path segments
-	pathDevices  = "devices"
-	pathPosture  = "posture" 
-	pathCerts    = "certs"
-	pathDevice   = "device"
-	pathCA       = "ca"
+	pathDevices = "devices"
+	pathPosture = "posture"
+	pathCerts   = "certs"
+	pathDevice  = "device"
+	pathCA      = "ca"
 )
 
 // Config holds the service configuration
@@ -48,10 +48,10 @@ type Config struct {
 	KeyPath         string
 	CertPath        string
 	CAPath          string
-	RefreshPeriod   time.Duration
-	PostureInterval time.Duration
 	LogLevel        string
 	PIDFile         string
+	RefreshPeriod   time.Duration
+	PostureInterval time.Duration
 	Daemonize       bool
 }
 
@@ -106,9 +106,7 @@ func (s *Service) Start() error {
 
 	// Handle daemon mode
 	if s.config.Daemonize {
-		if err := s.daemonize(); err != nil {
-			return fmt.Errorf("failed to daemonize: %w", err)
-		}
+		s.daemonize()
 	}
 
 	// Write PID file
@@ -439,20 +437,21 @@ func (s *Service) removePIDFile() {
 }
 
 // daemonize runs the process in background (Unix-like systems)
-func (_ *Service) daemonize() error {
+func (s *Service) daemonize() {
+	if s == nil {
+		return
+	}
 	// This is a simplified daemonization
 	// In production, you might want to use proper daemon libraries
 	// or systemd service files
 
 	if os.Getppid() == defaultSignalCapacity {
 		// Already daemonized
-		return nil
+		return
 	}
 
 	// Fork and exit parent
 	// Note: This is a basic implementation
 	// For robust daemonization, consider using libraries like
 	// github.com/sevlyar/go-daemon or systemd service files
-
-	return nil
 }

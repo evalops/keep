@@ -22,16 +22,16 @@ const (
 	bitShift        = 8
 	initialCapacity = 0
 	indexIncrement  = 1
-	
+
 	// Error messages
-	errAudienceMismatch = "audience mismatch"
-	errIssuerMismatch   = "issuer mismatch" 
-	errTokenExpired     = "token expired"
+	errAudienceMismatch  = "audience mismatch"
+	errIssuerMismatch    = "issuer mismatch"
+	errTokenExpired      = "token expired"
 	errInvalidIssuedTime = "invalid issued time"
-	errUnsupportedAlg   = "unsupported algorithm"
-	errInvalidJWTFormat = "invalid jwt format"
-	errKeyNotFound      = "key not found"
-	errAudienceRequired = "audience required"
+	errUnsupportedAlg    = "unsupported algorithm"
+	errInvalidJWTFormat  = "invalid jwt format"
+	errKeyNotFound       = "key not found"
+	errAudienceRequired  = "audience required"
 )
 
 type googleKey struct {
@@ -258,7 +258,7 @@ func buildRSAPublicKey(k googleKey) (*rsa.PublicKey, error) {
 func splitToken(token string) []string {
 	parts := make([]string, initialCapacity, jwtPartCount)
 	start := initialCapacity
-	for i := 0; i < len(token); i++ {
+	for i := range token {
 		if token[i] == '.' {
 			parts = append(parts, token[start:i])
 			start = i + indexIncrement

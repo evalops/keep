@@ -16,10 +16,10 @@ type Manager interface {
 
 // Config holds secret manager configuration
 type Config struct {
+	Extra  map[string]string // provider-specific configuration
 	Type   string            // ssm, vault, azure, env
 	Region string            // for AWS SSM
 	Prefix string            // for namespacing secrets
-	Extra  map[string]string // provider-specific configuration
 }
 
 // NewManager creates a secret manager based on configuration

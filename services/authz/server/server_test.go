@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"tailscale.com/tsnet"
+
+	"github.com/EvalOps/keep/pkg/retry"
 )
 
 const (
@@ -147,11 +149,12 @@ func createTestServer(_ *testing.T) *Server {
 		OPAURL:         "http://" + testOPAHost,
 		InventoryAPI:   "http://" + testInventoryHost,
 	}
-
+	cfgCopy := cfg
 	return &Server{
-		cfg:       cfg,
+		cfg:       &cfgCopy,
 		client:    &http.Client{Timeout: defaultClientTimeout},
 		invClient: &http.Client{Timeout: defaultInventoryTimeout},
+		retryCfg:  &retry.Config{},
 	}
 }
 
@@ -418,11 +421,12 @@ func createTestServerWithMocks(_ *testing.T, opaURL, inventoryURL string) *Serve
 		OPAURL:         opaURL,
 		InventoryAPI:   inventoryURL,
 	}
-
+	cfgCopy := cfg
 	return &Server{
-		cfg:       cfg,
+		cfg:       &cfgCopy,
 		client:    &http.Client{Timeout: defaultClientTimeout},
 		invClient: &http.Client{Timeout: defaultInventoryTimeout},
+		retryCfg:  &retry.Config{},
 	}
 }
 
