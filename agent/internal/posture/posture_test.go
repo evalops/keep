@@ -127,7 +127,7 @@ func TestDevicePosture_ToJSON(t *testing.T) {
 		},
 		Firewall: FirewallStatus{
 			Enabled: true,
-			Rules:   10,
+			Rules:   testRuleCount,
 			Service: "ufw",
 		},
 		AntiVirus:     false,
@@ -244,9 +244,9 @@ func TestParseInt(t *testing.T) {
 		input    string
 		expected int
 	}{
-		{"123", 123},
+		{"123", testNumber123},
 		{"0", 0},
-		{"-456", -456},
+		{"-456", testNumberNeg456},
 		{"invalid", 0},
 		{"", 0},
 		{"12.34", 0}, // Should fail for non-integer

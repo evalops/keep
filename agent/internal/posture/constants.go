@@ -52,4 +52,7 @@ const (
 	versionPartIndex        = 2
 	defaultsCommand         = "defaults"
 	readCommand             = "read"
+	testRuleCount           = 10
+	testNumber123           = 123
+	testNumberNeg456        = -456
 )
