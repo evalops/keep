@@ -14,15 +14,21 @@ import (
 	"time"
 )
 
+const (
+	testCAName    = "test-ca"
+	testCADefault = "test-ca-default"
+
+	testDeviceCN   = "test-device"
+	testDeviceOrg  = "test-org"
+	testDeviceURI  = "spiffe://example.com/device/123"
+	testDeviceDNS  = "device.example.com"
+	testDeviceTTLH = time.Hour
+)
+
 func TestLoadOrCreateCA(t *testing.T) {
 	tmpDir := t.TempDir()
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
-
-	const (
-		testCAName    = "test-ca"
-		testCADefault = "test-ca-default"
-	)
 
 	t.Run("creates new CA when files don't exist", func(t *testing.T) {
 		ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24*365)
@@ -157,14 +163,6 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 	tmpDir := t.TempDir()
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
-
-	const (
-		testDeviceCN   = "test-device"
-		testDeviceOrg  = "test-org"
-		testDeviceURI  = "spiffe://example.com/device/123"
-		testDeviceDNS  = "device.example.com"
-		testDeviceTTLH = time.Hour
-	)
 
 	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, 24*time.Hour)
 	if err != nil {
