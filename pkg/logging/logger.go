@@ -11,6 +11,11 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const (
+	defaultVersion = "dev"
+	emptyTraceID   = ""
+)
+
 // Initialize sets up global logging configuration
 func Initialize(service, level string) {
 	// Configure time format
@@ -126,11 +131,6 @@ func getVersion() string {
 	if version := os.Getenv("SERVICE_VERSION"); version != "" {
 		return version
 	}
-	const (
-		defaultVersion = "dev"
-		emptyString    = ""
-	)
-
 	return defaultVersion
 }
 
@@ -138,7 +138,7 @@ func getVersion() string {
 func getTraceID(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
-		return emptyString
+		return emptyTraceID
 	}
 	return span.SpanContext().TraceID().String()
 }
