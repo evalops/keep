@@ -17,6 +17,13 @@ import (
 	"time"
 )
 
+const (
+	jwtPartCount       = 3
+	bitShift           = 8
+	initialCapacity    = 0
+	indexIncrement     = 1
+)
+
 type googleKey struct {
 	KeyID     string `json:"kid"`
 	Algorithm string `json:"alg"`
@@ -232,19 +239,19 @@ func buildRSAPublicKey(k googleKey) (*rsa.PublicKey, error) {
 	n := new(big.Int).SetBytes(nBytes)
 	var e int
 	for _, b := range eBytes {
-		e = e<<8 + int(b)
+		e = e<<bitShift + int(b)
 	}
 
 	return &rsa.PublicKey{N: n, E: e}, nil
 }
 
 func splitToken(token string) []string {
-	parts := make([]string, 0, 3)
-	start := 0
+	parts := make([]string, initialCapacity, jwtPartCount)
+	start := initialCapacity
 	for i := 0; i < len(token); i++ {
 		if token[i] == '.' {
 			parts = append(parts, token[start:i])
-			start = i + 1
+			start = i + indexIncrement
 		}
 	}
 	parts = append(parts, token[start:])

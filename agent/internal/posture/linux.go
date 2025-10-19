@@ -176,12 +176,13 @@ func (c *LinuxCollector) checkSystemUpdated() bool {
 	}
 
 	// Try yum/dnf for Red Hat systems
-	if output, err := runCommand("yum", "check-update"); err != nil {
+	output, err := runCommand("yum", "check-update")
+	if err != nil {
 		// Exit code 0 means no updates, 100 means updates available
 		return true
-	} else {
-		return strings.TrimSpace(output) == ""
 	}
+	
+	return strings.TrimSpace(output) == ""
 }
 
 // checkDiskEncryption checks if disk encryption is enabled

@@ -41,6 +41,7 @@ const (
 	defaultInitialInterval   = 200 * time.Millisecond
 	defaultRetryMultiplier   = 1.5
 	defaultMaxInterval       = 2 * time.Second
+	emptyString              = ""
 	errDecodeRequest         = "bad request"
 	errMissingMFAParams      = "missing MFA parameters"
 	errMethodNotAllowed      = "method not allowed"
@@ -78,10 +79,10 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	// Load CA from externally provisioned certificates (never generate in service)
-	if cfg.RootCAPath == "" {
+	if cfg.RootCAPath == emptyString {
 		return nil, errors.New("root CA certificate path is required (must be provisioned externally)")
 	}
-	if cfg.TLSKeyPath == "" {
+	if cfg.TLSKeyPath == emptyString {
 		return nil, errors.New("root CA private key path is required (must be provisioned externally)")
 	}
 
@@ -180,10 +181,10 @@ func New(cfg Config) (*Server, error) {
 		s.httpSrv = &http.Server{
 			Addr:              cfg.HTTPAddr,
 			Handler:           r,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
+			ReadHeaderTimeout: defaultReadHeaderTimeout,
+			ReadTimeout:       defaultReadTimeout,
+			WriteTimeout:      defaultWriteTimeout,
+			IdleTimeout:       defaultIdleTimeout,
 			TLSConfig: &tls.Config{
 				Certificates: []tls.Certificate{cert},
 				ClientAuth:   tls.NoClientCert,
@@ -197,10 +198,10 @@ func New(cfg Config) (*Server, error) {
 		s.httpSrv = &http.Server{
 			Addr:              cfg.HTTPAddr,
 			Handler:           r,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
+			ReadHeaderTimeout: defaultReadHeaderTimeout,
+			ReadTimeout:       defaultReadTimeout,
+			WriteTimeout:      defaultWriteTimeout,
+			IdleTimeout:       defaultIdleTimeout,
 		}
 		var err error
 		s.rootCAPEM, err = ca.CertificatePEM()
@@ -213,10 +214,10 @@ func New(cfg Config) (*Server, error) {
 	if tailscaleListener != nil {
 		s.tsHTTP = &http.Server{
 			Handler:           r,
-			ReadHeaderTimeout: 10 * time.Second,
-			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
+			ReadHeaderTimeout: defaultReadHeaderTimeout,
+			ReadTimeout:       defaultReadTimeout,
+			WriteTimeout:      defaultWriteTimeout,
+			IdleTimeout:       defaultIdleTimeout,
 		}
 		s.tsListener = tailscaleListener
 		log.Printf("Tailscale HTTP server configured on %s", tailscaleListener.Addr().String())

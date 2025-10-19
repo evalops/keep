@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+const (
+	emptyString = ""
+)
+
 // Helper provides convenient methods for secret management integration
 type Helper struct {
 	manager Manager
@@ -148,19 +152,19 @@ func BuildDSN(dbConfig map[string]string) (string, error) {
 func BuildPostgresDSN(user, password, host, port, dbname string) string {
 	var parts []string
 
-	if user != "" {
+	if user != emptyString {
 		parts = append(parts, "user="+user)
 	}
-	if password != "" {
+	if password != emptyString {
 		parts = append(parts, "password="+password)
 	}
-	if host != "" {
+	if host != emptyString {
 		parts = append(parts, "host="+host)
 	}
-	if port != "" {
+	if port != emptyString {
 		parts = append(parts, "port="+port)
 	}
-	if dbname != "" {
+	if dbname != emptyString {
 		parts = append(parts, "dbname="+dbname)
 	}
 
