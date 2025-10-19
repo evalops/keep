@@ -13,11 +13,13 @@ import (
 )
 
 const (
-	emptyString         = ""
-	defaultAuthzPort    = ":8443"
-	defaultGRPCPort     = ":8444"
-	defaultOPAURL       = "http://opa:8181"
-	defaultInventoryURL = "http://inventory:8080"
+	emptyString           = ""
+	defaultAuthzPort      = ":8443"
+	defaultGRPCPort       = ":8444" 
+	defaultOPAURL         = "http://opa:8181"
+	defaultInventoryURL   = "http://inventory:8080"
+	defaultRootCACertPath = "/data/certs/keep-root.pem"
+	defaultRootCAKeyPath  = "/data/certs/keep-root-key.pem"
 )
 
 func main() {
@@ -34,8 +36,8 @@ func main() {
 	addr := getenv("AUTHZ_LISTEN_ADDR", defaultAuthzPort)
 	grpcAddr := getenv("AUTHZ_GRPC_ADDR", defaultGRPCPort)
 	certFile := secretHelper.GetOrDefault("AUTHZ_CERT_FILE", tlsConfig["AUTHZ_TLS_CERT"])
-	rootCAPath := secretHelper.GetOrDefault("AUTHZ_ROOT_CA_CERT", "/data/certs/keep-root.pem")
-	rootCAKeyPath := secretHelper.GetOrDefault("AUTHZ_ROOT_CA_KEY", "/data/certs/keep-root-key.pem")
+	rootCAPath := secretHelper.GetOrDefault("AUTHZ_ROOT_CA_CERT", defaultRootCACertPath)
+	rootCAKeyPath := secretHelper.GetOrDefault("AUTHZ_ROOT_CA_KEY", defaultRootCAKeyPath)
 	googleClientID := secretHelper.GetOrDefault("GOOGLE_CLIENT_ID", apiKeys["GOOGLE_CLIENT_ID"])
 
 	if googleClientID == "" {
