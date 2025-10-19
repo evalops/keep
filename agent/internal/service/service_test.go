@@ -215,9 +215,7 @@ func TestService_initialRegistration(t *testing.T) {
 }
 
 // TestService_updatePosture tests posture updates
-
 func TestService_updatePosture(t *testing.T) {
-
 	t.Run("successful posture update", func(t *testing.T) {
 		updateRequests := 0
 		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

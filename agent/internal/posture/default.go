@@ -6,7 +6,7 @@ import "runtime"
 type DefaultCollector struct{}
 
 // CollectPosture returns minimal posture information for unsupported platforms
-func (c *DefaultCollector) CollectPosture() (*DevicePosture, error) {
+func (*DefaultCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
 		OS: OperatingSystem{
 			Name:      UnknownValue,

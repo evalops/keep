@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
 	// Register pgx driver for database/sql usage
 	_ "github.com/jackc/pgx/v5/stdlib"
 
@@ -210,7 +211,7 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
 		log.Printf("failed to encode health response: %v", err)
