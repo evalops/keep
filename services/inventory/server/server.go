@@ -52,9 +52,9 @@ type Config struct {
 }
 
 type Server struct {
-	cfg  Config
 	db   *sql.DB
 	http *http.Server
+	cfg  Config
 }
 
 func NewServer(cfg Config) (*Server, error) {
@@ -244,11 +244,11 @@ func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 }
 
 type Device struct {
+	Registered  time.Time `json:"registered_at"`
+	LastUpdated time.Time `json:"last_updated"`
 	ID          string    `json:"id"`
 	PublicKey   string    `json:"public_key"`
 	Posture     string    `json:"posture"`
-	Registered  time.Time `json:"registered_at"`
-	LastUpdated time.Time `json:"last_updated"`
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {

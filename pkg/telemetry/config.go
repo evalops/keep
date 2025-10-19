@@ -6,6 +6,7 @@ const (
 	defaultServiceName     = "keep-service"
 	defaultEnvironment     = "development"
 	defaultShutdownTimeout = 5 * time.Second
+	zeroDuration           = 0 * time.Second
 )
 
 // Config controls OpenTelemetry initialization.
@@ -25,7 +26,7 @@ func (c *Config) defaults() {
 	if c.Environment == "" {
 		c.Environment = defaultEnvironment
 	}
-	if c.ShutdownTimeout == 0 {
+	if c.ShutdownTimeout == zeroDuration {
 		c.ShutdownTimeout = defaultShutdownTimeout
 	}
 }
