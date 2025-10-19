@@ -31,6 +31,13 @@ const (
 	statusCodeThreshold   = 400
 	permOwnerReadWrite    = 0o600
 	permOwnerReadExecute  = 0o700
+	
+	// API path segments
+	pathDevices  = "devices"
+	pathPosture  = "posture" 
+	pathCerts    = "certs"
+	pathDevice   = "device"
+	pathCA       = "ca"
 )
 
 // Config holds the service configuration
@@ -271,7 +278,7 @@ func (s *Service) updatePosture() error {
 		return err
 	}
 
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.InventoryURL, "/"), "v1", "devices", s.config.DeviceID, "posture")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.InventoryURL, slash), apiVersion, pathDevices, s.config.DeviceID, pathPosture)
 	if err != nil {
 		return fmt.Errorf("build posture endpoint: %w", err)
 	}
@@ -296,7 +303,7 @@ func (s *Service) registerDevice(publicKey, posture string) error {
 		return err
 	}
 
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.InventoryURL, "/"), "v1", "devices")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.InventoryURL, slash), apiVersion, pathDevices)
 	if err != nil {
 		return fmt.Errorf("build registration endpoint: %w", err)
 	}
@@ -330,7 +337,7 @@ func (s *Service) obtainCertificate() error {
 		return err
 	}
 
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), apiVersion, "certs", "device")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), apiVersion, pathCerts, pathDevice)
 	if err != nil {
 		return fmt.Errorf("build certificate endpoint: %w", err)
 	}
@@ -372,7 +379,7 @@ func (s *Service) obtainCertificate() error {
 
 // downloadCA downloads the root CA certificate
 func (s *Service) downloadCA() ([]byte, error) {
-	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), apiVersion, "certs", "ca")
+	endpoint, err := url.JoinPath(strings.TrimSuffix(s.config.AttestURL, slash), apiVersion, pathCerts, pathCA)
 	if err != nil {
 		return nil, fmt.Errorf("build CA endpoint: %w", err)
 	}

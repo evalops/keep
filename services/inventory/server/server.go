@@ -50,6 +50,7 @@ type Config struct {
 	RequireMTLS bool // Whether to require client certificates
 }
 
+// Server implements the device inventory HTTP service
 type Server struct {
 	db   *sql.DB
 	http *http.Server
