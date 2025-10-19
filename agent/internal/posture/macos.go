@@ -94,7 +94,7 @@ func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	fw.Service = macOSFirewallService
 
 	// Check if firewall is enabled
-	output, err := runCommand(defaultsCommand, "read", "/Library/Preferences/com.apple.alf", "globalstate")
+	output, err := runCommand(defaultsCommand, readCommand, "/Library/Preferences/com.apple.alf", "globalstate")
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (c *MacOSCollector) checkDiskEncryption() bool {
 // checkScreenLock checks if screen lock/password is required
 func (c *MacOSCollector) checkScreenLock() bool {
 	// Check if password is required after screensaver
-	output, err := runCommand(defaultsCommand, "read", "com.apple.screensaver", macOSScreenPassword)
+	output, err := runCommand(defaultsCommand, readCommand, "com.apple.screensaver", macOSScreenPassword)
 	if err == nil && strings.Contains(output, macOSPasswordEnabled) {
 		return true
 	}
@@ -185,7 +185,7 @@ func (c *MacOSCollector) checkScreenLock() bool {
 	}
 
 	// Check System Preferences security settings
-	output, err = runCommand(defaultsCommand, "read", "com.apple.screensaver", macOSScreenDelay)
+	output, err = runCommand(defaultsCommand, readCommand, "com.apple.screensaver", macOSScreenDelay)
 	if err == nil {
 		return true
 	}

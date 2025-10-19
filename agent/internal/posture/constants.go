@@ -47,4 +47,5 @@ const (
 	notFoundIndex           = -1
 	versionPartIndex        = 2
 	defaultsCommand         = "defaults"
+	readCommand             = "read"
 )
