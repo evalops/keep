@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+const (
+	rsaPublicExponent = 65537 // Standard RSA public exponent (2^16 + 1)
+)
+
 func TestBuildRSAPublicKey(t *testing.T) {
 	mod := base64.RawURLEncoding.EncodeToString([]byte{0x01, 0x02, 0x03})
 	exp := base64.RawURLEncoding.EncodeToString([]byte{0x01, 0x00, 0x01})
@@ -12,7 +16,7 @@ func TestBuildRSAPublicKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if pub.N.BitLen() == 0 || pub.E != 65537 {
+	if pub.N.BitLen() == 0 || pub.E != rsaPublicExponent {
 		t.Fatalf("unexpected key values: %#v", pub)
 	}
 }

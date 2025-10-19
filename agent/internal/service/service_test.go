@@ -23,6 +23,7 @@ const (
 	testInventoryPort  = ":8081"
 	testAttestPort     = ":8443"
 	testPIDContent     = "12345\n"
+	localhostBase      = "http://localhost"
 )
 
 // mockPostureCollector implements the posture.Collector interface for testing
@@ -51,8 +52,8 @@ func TestService_New(t *testing.T) {
 	t.Run("creates service with valid config", func(t *testing.T) {
 		config := &Config{
 			DeviceID:        testDeviceID,
-			InventoryURL:    "http://localhost" + testInventoryPort,
-			AttestURL:       "http://localhost" + testAttestPort,
+			InventoryURL:    localhostBase + testInventoryPort,
+			AttestURL:       localhostBase + testAttestPort,
 			KeyPath:         "/tmp/test.key",
 			CertPath:        "/tmp/test.crt",
 			CAPath:          "/tmp/ca.pem",
@@ -119,7 +120,7 @@ func TestService_initialRegistration(t *testing.T) {
 		config := &Config{
 			DeviceID:     testDeviceID,
 			InventoryURL: mockInventory.URL,
-			AttestURL:    "http://localhost:8443",
+			AttestURL:    localhostBase + testAttestPort,
 			KeyPath:      filepath.Join(tmpDir, "test.key"),
 		}
 
@@ -154,7 +155,7 @@ func TestService_initialRegistration(t *testing.T) {
 	t.Run("handles posture collection failure", func(t *testing.T) {
 		config := &Config{
 			DeviceID:     testDeviceID,
-			InventoryURL: "http://localhost:8081",
+			InventoryURL: localhostBase + testInventoryPort,
 			KeyPath:      filepath.Join(tmpDir, "test.key"),
 		}
 
@@ -282,7 +283,7 @@ func TestService_updatePosture(t *testing.T) {
 	t.Run("handles posture collection failure", func(t *testing.T) {
 		config := &Config{
 			DeviceID:     testDeviceID,
-			InventoryURL: "http://localhost:8081",
+			InventoryURL: localhostBase + testInventoryPort,
 		}
 
 		service := New(config)
