@@ -44,6 +44,7 @@ const (
 	emptyString              = ""
 	contentTypeHeader        = "Content-Type"
 	applicationJSON          = "application/json"
+	applicationPEM           = "application/x-pem-file"
 	serviceNameAuthz         = "authz"
 	serviceNameOPA           = "opa"
 	serviceNameMFA           = "mfa"
@@ -651,7 +652,7 @@ func (s *Server) caHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.Header().Set(contentTypeHeader, applicationPEM)
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(s.rootCAPEM); err != nil {
 		log.Printf("failed to write CA response: %v", err)
