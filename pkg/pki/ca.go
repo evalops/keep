@@ -27,6 +27,11 @@ const (
 	maxSerialShift        = 128
 	initialCapacity       = 0
 	bigIntOne             = 1
+	
+	// Error messages
+	errParseCACert        = "failed to parse CA certificate PEM"
+	errParseCAKey         = "failed to parse CA key PEM"  
+	errUnexpectedKeyType  = "unexpected CA private key type"
 )
 
 // validatePath ensures the path is safe from directory traversal attacks
@@ -144,7 +149,7 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 
 	certBlock, _ := pem.Decode(certPEM)
 	if certBlock == nil {
-		return nil, errors.New("failed to parse CA certificate PEM")
+		return nil, errors.New(errParseCACert)
 	}
 	cert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
@@ -153,7 +158,7 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 
 	keyBlock, _ := pem.Decode(keyPEM)
 	if keyBlock == nil {
-		return nil, errors.New("failed to parse CA key PEM")
+		return nil, errors.New(errParseCAKey)
 	}
 
 	keyAny, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
@@ -162,7 +167,7 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 	}
 	priv, ok := keyAny.(*ecdsa.PrivateKey)
 	if !ok {
-		return nil, errors.New("unexpected CA private key type")
+		return nil, errors.New(errUnexpectedKeyType)
 	}
 
 	return &CertificateAuthority{cert: cert, key: priv, certPath: certPath, keyPath: keyPath}, nil

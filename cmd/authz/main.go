@@ -13,7 +13,11 @@ import (
 )
 
 const (
-	emptyString = ""
+	emptyString         = ""
+	defaultAuthzPort    = ":8443"
+	defaultGRPCPort     = ":8444"
+	defaultOPAURL       = "http://opa:8181"
+	defaultInventoryURL = "http://inventory:8080"
 )
 
 func main() {
@@ -27,8 +31,8 @@ func main() {
 	// Load TLS configuration from secrets
 	tlsConfig := secretHelper.LoadTLSConfig("AUTHZ")
 
-	addr := getenv("AUTHZ_LISTEN_ADDR", ":8443")
-	grpcAddr := getenv("AUTHZ_GRPC_ADDR", ":8444")
+	addr := getenv("AUTHZ_LISTEN_ADDR", defaultAuthzPort)
+	grpcAddr := getenv("AUTHZ_GRPC_ADDR", defaultGRPCPort)
 	certFile := secretHelper.GetOrDefault("AUTHZ_CERT_FILE", tlsConfig["AUTHZ_TLS_CERT"])
 	rootCAPath := secretHelper.GetOrDefault("AUTHZ_ROOT_CA_CERT", "/data/certs/keep-root.pem")
 	rootCAKeyPath := secretHelper.GetOrDefault("AUTHZ_ROOT_CA_KEY", "/data/certs/keep-root-key.pem")
@@ -45,8 +49,8 @@ func main() {
 		TLSKeyPath:          rootCAKeyPath,
 		RootCAPath:          rootCAPath,
 		GoogleClientID:      googleClientID,
-		OPAURL:              getenv("OPA_URL", "http://opa:8181"),
-		InventoryAPI:        getenv("INVENTORY_API", "http://inventory:8080"),
+		OPAURL:              getenv("OPA_URL", defaultOPAURL),
+		InventoryAPI:        getenv("INVENTORY_API", defaultInventoryURL),
 		InventoryClientCert: secretHelper.GetOrDefault("AUTHZ_CLIENT_CERT", tlsConfig["AUTHZ_CLIENT_CERT"]),
 		InventoryClientKey:  secretHelper.GetOrDefault("AUTHZ_CLIENT_KEY", tlsConfig["AUTHZ_CLIENT_KEY"]),
 		InventoryCA:         secretHelper.GetOrDefault("AUTHZ_CA_CERT", tlsConfig["AUTHZ_CLIENT_CA"]),
