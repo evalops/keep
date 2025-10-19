@@ -1,17 +1,20 @@
 import pytest
+from typing import Generator, Any
 
 from app.main import app
 
+TestClient = Any
+
 
 @pytest.fixture
-def client():
+def client() -> Generator[Any, None, None]:
     """Create a test client for the Flask app."""
     app.config["TESTING"] = True
     with app.test_client() as client:
         yield client
 
 
-def test_health_endpoint(client):
+def test_health_endpoint(client: TestClient) -> None:
     """Test the health check endpoint."""
     response = client.get("/health")
     assert response.status_code == 200
@@ -21,7 +24,7 @@ def test_health_endpoint(client):
     assert json_data["status"] == "ok"
 
 
-def test_index_endpoint_without_headers(client):
+def test_index_endpoint_without_headers(client: TestClient) -> None:
     """Test the index endpoint without client headers."""
     response = client.get("/")
     assert response.status_code == 200
@@ -32,7 +35,7 @@ def test_index_endpoint_without_headers(client):
     assert "Device ID: unknown" in text
 
 
-def test_index_endpoint_with_client_subject(client):
+def test_index_endpoint_with_client_subject(client: TestClient) -> None:
     """Test the index endpoint with X-Client-Subject header."""
     headers = {"X-Client-Subject": "Subject=CN=user@example.com,O=Company"}
     response = client.get("/", headers=headers)
@@ -42,7 +45,7 @@ def test_index_endpoint_with_client_subject(client):
     assert "Client cert subject: CN=user@example.com,O=Company" in text
 
 
-def test_index_endpoint_with_device_id(client):
+def test_index_endpoint_with_device_id(client: TestClient) -> None:
     """Test the index endpoint with X-Device-ID header."""
     headers = {"X-Device-ID": "laptop-001"}
     response = client.get("/", headers=headers)
@@ -52,7 +55,7 @@ def test_index_endpoint_with_device_id(client):
     assert "Device ID: laptop-001" in text
 
 
-def test_index_endpoint_with_all_headers(client):
+def test_index_endpoint_with_all_headers(client: TestClient) -> None:
     """Test the index endpoint with all client headers."""
     headers = {
         "X-Client-Subject": "Subject=CN=admin@company.com,O=Company,OU=IT",
@@ -67,7 +70,7 @@ def test_index_endpoint_with_all_headers(client):
     assert "Device ID: workstation-123" in text
 
 
-def test_step_up_endpoint(client):
+def test_step_up_endpoint(client: TestClient) -> None:
     """Test the step-up authentication endpoint."""
     response = client.post("/step-up")
     assert response.status_code == 202
@@ -77,19 +80,19 @@ def test_step_up_endpoint(client):
     assert json_data["status"] == "step-up required"
 
 
-def test_step_up_endpoint_wrong_method(client):
+def test_step_up_endpoint_wrong_method(client: TestClient) -> None:
     """Test step-up endpoint rejects non-POST methods."""
     response = client.get("/step-up")
     assert response.status_code == 405  # Method Not Allowed
 
 
-def test_nonexistent_endpoint(client):
+def test_nonexistent_endpoint(client: TestClient) -> None:
     """Test that non-existent endpoints return 404."""
     response = client.get("/nonexistent")
     assert response.status_code == 404
 
 
-def test_client_subject_prefix_removal(client):
+def test_client_subject_prefix_removal(client: TestClient) -> None:
     """Test that Subject= prefix is properly removed from client subject."""
     headers = {"X-Client-Subject": "Subject=CN=test@example.com"}
     response = client.get("/", headers=headers)
@@ -101,7 +104,7 @@ def test_client_subject_prefix_removal(client):
     assert "Subject=CN=test@example.com" not in text
 
 
-def test_client_subject_without_prefix(client):
+def test_client_subject_without_prefix(client: TestClient) -> None:
     """Test client subject header without Subject= prefix."""
     headers = {"X-Client-Subject": "CN=test@example.com"}
     response = client.get("/", headers=headers)
@@ -111,7 +114,7 @@ def test_client_subject_without_prefix(client):
     assert "Client cert subject: CN=test@example.com" in text
 
 
-def test_empty_headers(client):
+def test_empty_headers(client: TestClient) -> None:
     """Test behavior with empty but present headers."""
     headers = {"X-Client-Subject": "", "X-Device-ID": ""}
     response = client.get("/", headers=headers)

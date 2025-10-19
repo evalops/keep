@@ -27,31 +27,31 @@ def _resource(service_name: str, environment: str) -> Resource:
 
 
 def init_tracing(service_name: str, environment: str, endpoint: str, insecure: bool) -> None:
-    exporter = OTLPSpanExporter(endpoint=endpoint or None, insecure=insecure)
+    exporter = OTLPSpanExporter(endpoint=endpoint or None)
     tracer_provider = TracerProvider(resource=_resource(service_name, environment))
     tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(tracer_provider)
 
 
 def init_metrics(service_name: str, environment: str, endpoint: str, insecure: bool) -> None:
-    exporter = OTLPMetricExporter(endpoint=endpoint or None, insecure=insecure)
+    exporter = OTLPMetricExporter(endpoint=endpoint or None)
     reader = PeriodicExportingMetricReader(exporter)
     provider = MeterProvider(resource=_resource(service_name, environment), metric_readers=[reader])
     metrics.set_meter_provider(provider)
 
 
-def instrument_flask_app(app) -> None:
+def instrument_flask_app(app: object) -> None:
     FlaskInstrumentor().instrument_app(app)
 
 
-def setup(app, service_name: str, environment: Optional[str] = None) -> None:
+def setup(app: object, service_name: str, environment: Optional[str] = None) -> None:
     environment = environment or os.getenv("APP_ENV", "dev")
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
     insecure = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
 
     try:
-        init_tracing(service_name, environment, endpoint, insecure)
-        init_metrics(service_name, environment, endpoint, insecure)
+        init_tracing(service_name, environment or "dev", endpoint or "", insecure)
+        init_metrics(service_name, environment or "dev", endpoint or "", insecure)
         instrument_flask_app(app)
     except Exception:  # pragma: no cover - best effort initialization
         _logger.exception("failed to initialize telemetry")

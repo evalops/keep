@@ -1,6 +1,8 @@
 import logging
 import time
 from contextlib import contextmanager
+from typing import Generator, Dict, Any, Tuple
+from flask import Response
 
 from flask import Flask, jsonify, request
 
@@ -11,7 +13,7 @@ telemetry_setup(app, service_name="keep-app")
 
 
 @contextmanager
-def record_route_metrics(route: str):
+def record_route_metrics(route: str) -> Generator[None, None, None]:
     start = time.perf_counter()
     try:
         yield
@@ -24,13 +26,13 @@ def record_route_metrics(route: str):
 
 
 @app.route("/health")
-def health():
+def health() -> Dict[str, str]:
     with record_route_metrics("health"):
         return {"status": "ok"}
 
 
 @app.route("/")
-def index():
+def index() -> str:
     with record_route_metrics("index"):
         cert_subject = request.headers.get("X-Client-Subject", "unknown") or "unknown"
         if cert_subject.startswith("Subject="):
@@ -44,6 +46,6 @@ def index():
 
 
 @app.route("/step-up", methods=["POST"])
-def step_up():
+def step_up() -> Tuple[Response, int]:
     with record_route_metrics("step_up"):
         return jsonify({"status": "step-up required"}), 202

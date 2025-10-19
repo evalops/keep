@@ -64,7 +64,7 @@ def resolve_dsn() -> str:
 
 def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
     try:
-        import psycopg  # type: ignore
+        import psycopg
     except ImportError as exc:  # pragma: no cover - developer misconfiguration
         raise RuntimeError("psycopg is required for database tests") from exc
 
@@ -74,8 +74,8 @@ def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
     while True:
         attempt += 1
         try:
-            with psycopg.connect(dsn, connect_timeout=3) as conn:  # type: ignore[attr-defined]
-                with conn.cursor() as cur:  # type: ignore[attr-defined]
+            with psycopg.connect(dsn, connect_timeout=3) as conn:
+                with conn.cursor() as cur:
                     cur.execute("SELECT 1")
                 return
         except Exception as exc:  # pragma: no cover - transient failures
