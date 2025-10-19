@@ -9,14 +9,19 @@ import (
 	"github.com/EvalOps/keep/services/mfa"
 )
 
+const (
+	defaultAddr       = ":8445"
+	defaultCodeDigits = 6
+)
+
 func main() {
-	addr := getenv("MFA_LISTEN_ADDR", ":8445")
+	addr := getenv("MFA_LISTEN_ADDR", defaultAddr)
 	sessionTimeout := getenvDuration("MFA_SESSION_TIMEOUT", 5*time.Minute)
 
 	cfg := mfa.Config{
 		Addr:           addr,
 		SessionTimeout: sessionTimeout,
-		CodeLength:     6,
+		CodeLength:     defaultCodeDigits,
 	}
 
 	server := mfa.New(cfg)

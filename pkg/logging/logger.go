@@ -126,14 +126,19 @@ func getVersion() string {
 	if version := os.Getenv("SERVICE_VERSION"); version != "" {
 		return version
 	}
-	return "dev"
+	const (
+		defaultVersion = "dev"
+		emptyString    = ""
+	)
+
+	return defaultVersion
 }
 
 // getTraceID extracts trace ID from context (placeholder for OpenTelemetry integration)
 func getTraceID(ctx context.Context) string {
 	span := trace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
-		return ""
+		return emptyString
 	}
 	return span.SpanContext().TraceID().String()
 }
