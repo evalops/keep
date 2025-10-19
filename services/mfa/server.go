@@ -35,6 +35,20 @@ const (
 	writeTimeout          = 30 * time.Second
 	idleTimeout           = 60 * time.Second
 	requestTimeout        = 30 * time.Second
+	// Response fields
+	fieldChallenge = "challenge"
+	fieldCode      = "code"
+	fieldStatus    = "status"
+	fieldMessage   = "message"
+	fieldToken     = "token"
+	fieldAttempts  = "attempts"
+	// Status values
+	statusOK       = "ok"
+	statusVerified = "verified"
+	// Messages
+	msgMFASuccess = "MFA verification successful"
+	// URL params
+	paramSessionID = "sessionID"
 )
 
 // Server implements a basic MFA service for step-up authentication
@@ -171,10 +185,10 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerContentType, contentTypeJSON)
 	response := map[string]interface{}{
-		"session_id": session.SessionID,
-		"challenge":  session.Challenge,
-		"expires_at": session.ExpiresAt,
-		"code":       code, // Only for PoC testing
+		"session_id":  session.SessionID,
+		fieldChallenge: session.Challenge,
+		"expires_at":  session.ExpiresAt,
+		fieldCode:     code, // Only for PoC testing
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA challenge response")
@@ -238,9 +252,9 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerContentType, contentTypeJSON)
 	response := map[string]interface{}{
-		"status":  "verified",
-		"message": "MFA verification successful",
-		"token":   generateMFAToken(session), // Short-lived MFA verification token
+		fieldStatus:  statusVerified,
+		fieldMessage: msgMFASuccess,
+		fieldToken:   generateMFAToken(session), // Short-lived MFA verification token
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA verify response")
@@ -249,7 +263,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 // statusHandler returns MFA session status
 func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
-	sessionID := chi.URLParam(r, "sessionID")
+	sessionID := chi.URLParam(r, paramSessionID)
 
 	s.mu.RLock()
 	session, exists := s.sessions[sessionID]
@@ -278,11 +292,11 @@ func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RUnlock()
 
 	health := map[string]interface{}{
-		"status":          "ok",
+		fieldStatus:       statusOK,
 		"active_sessions": sessionCount,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	if err := json.NewEncoder(w).Encode(health); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA health response")
 	}

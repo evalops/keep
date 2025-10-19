@@ -40,7 +40,7 @@ func TestGenerateSigningKey(t *testing.T) {
 			t.Fatalf("Key file not created: %v", err)
 		}
 
-		if fileInfo.Mode().Perm() != 0o600 {
+		if fileInfo.Mode().Perm() != defaultKeyPerm {
 			t.Errorf("Expected file permissions 0600, got %v", fileInfo.Mode().Perm())
 		}
 	})
@@ -152,7 +152,7 @@ func TestLoadSigningKey(t *testing.T) {
 
 	t.Run("fails with invalid PEM", func(t *testing.T) {
 		invalidPEMPath := filepath.Join(tmpDir, "invalid.key")
-		if err := os.WriteFile(invalidPEMPath, []byte("not a pem file"), 0o600); err != nil {
+		if err := os.WriteFile(invalidPEMPath, []byte("not a pem file"), defaultKeyPerm); err != nil {
 			t.Fatalf("Failed to write invalid PEM file: %v", err)
 		}
 
@@ -176,7 +176,7 @@ MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKB
 wHVKYdZyLkmMdVNjJqLs2Nx7e62VQqTrqTqhqY+HVhMV7HjfRqNVM6pYsf3VrGQh
 -----END PRIVATE KEY-----`)
 
-		if err := os.WriteFile(rsaKeyPath, keyData, 0o600); err != nil {
+		if err := os.WriteFile(rsaKeyPath, keyData, defaultKeyPerm); err != nil {
 			t.Fatalf("Failed to write RSA key: %v", err)
 		}
 
@@ -194,7 +194,7 @@ wHVKYdZyLkmMdVNjJqLs2Nx7e62VQqTrqTqhqY+HVhMV7HjfRqNVM6pYsf3VrGQh
 invalidbase64data!!!
 -----END PRIVATE KEY-----`
 
-		if err := os.WriteFile(corruptPath, []byte(corruptPEM), 0o600); err != nil {
+		if err := os.WriteFile(corruptPath, []byte(corruptPEM), defaultKeyPerm); err != nil {
 			t.Fatalf("Failed to write corrupt PEM: %v", err)
 		}
 
@@ -363,7 +363,7 @@ c3QtY2VydDAeFw0yM...")
 		}
 
 		// Verify permissions
-		if fileInfo.Mode().Perm() != 0o600 {
+		if fileInfo.Mode().Perm() != defaultKeyPerm {
 			t.Errorf("Expected file permissions 0600, got %v", fileInfo.Mode().Perm())
 		}
 

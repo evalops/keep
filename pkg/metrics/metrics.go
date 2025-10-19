@@ -7,6 +7,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+const (
+	// Policy constants
+	keepAllowPolicy = "keep/allow"
+)
+
+// Histogram bucket constants
+var (
+	opaEvaluationBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0}
+	trustScoreBuckets    = []float64{0, 20, 40, 60, 80, 100}
+	databaseQueryBuckets = []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0}
+)
+
 var (
 	// HTTP request metrics
 	HTTPRequestsTotal = promauto.NewCounterVec(
@@ -39,7 +51,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "opa_evaluation_duration_seconds",
 			Help:    "OPA policy evaluation duration in seconds",
-			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0},
+			Buckets: opaEvaluationBuckets,
 		},
 		[]string{"service", "policy"},
 	)
@@ -57,7 +69,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "device_trust_scores",
 			Help:    "Device trust score distribution",
-			Buckets: []float64{0, 20, 40, 60, 80, 100},
+			Buckets: trustScoreBuckets,
 		},
 		[]string{"service", "posture"},
 	)
@@ -100,7 +112,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "database_query_duration_seconds",
 			Help:    "Database query duration in seconds",
-			Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0},
+			Buckets: databaseQueryBuckets,
 		},
 		[]string{"service", "query_type"},
 	)
@@ -115,7 +127,7 @@ func RecordHTTPRequest(service, method, path, status string, duration time.Durat
 // RecordAuthzDecision records authorization decision metrics
 func RecordAuthzDecision(service, decision, reason string, duration time.Duration) {
 	AuthzDecisionsTotal.WithLabelValues(service, decision, reason).Inc()
-	OPAEvaluationDuration.WithLabelValues(service, "keep/allow").Observe(duration.Seconds())
+	OPAEvaluationDuration.WithLabelValues(service, keepAllowPolicy).Observe(duration.Seconds())
 }
 
 // RecordDeviceRegistration records device registration metrics
