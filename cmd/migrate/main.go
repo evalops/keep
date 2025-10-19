@@ -47,8 +47,12 @@ func run() error {
 		return fmt.Errorf("init migrator: %w", err)
 	}
 	defer func() {
-		if closeErr := m.Close(); closeErr != nil && !errors.Is(closeErr, migrate.ErrNoChange) {
-			log.Printf("migrate close: %v", closeErr)
+		sourceErr, dbErr := m.Close()
+		if sourceErr != nil && !errors.Is(sourceErr, migrate.ErrNoChange) {
+			log.Printf("migrate source close: %v", sourceErr)
+		}
+		if dbErr != nil && !errors.Is(dbErr, migrate.ErrNoChange) {
+			log.Printf("migrate db close: %v", dbErr)
 		}
 	}()
 
