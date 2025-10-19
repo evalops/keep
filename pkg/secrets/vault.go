@@ -12,7 +12,6 @@ import (
 
 // VaultManager implements secret management using HashiCorp Vault
 const (
-	emptyString        = ""
 	valueKey           = "value"
 	dataKey            = "data"
 	vaultAddrKey       = "VAULT_ADDR"

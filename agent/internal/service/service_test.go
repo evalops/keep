@@ -76,7 +76,7 @@ func TestService_initialRegistration(t *testing.T) {
 	t.Run("successful registration with healthy posture", func(t *testing.T) {
 		// Create mock inventory server
 		registrationRequests := 0
-		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/v1/devices" && r.Method == http.MethodPost {
 				registrationRequests++
 
@@ -218,7 +218,7 @@ func TestService_initialRegistration(t *testing.T) {
 func TestService_updatePosture(t *testing.T) {
 	t.Run("successful posture update", func(t *testing.T) {
 		updateRequests := 0
-		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.URL.Path, "/posture") && r.Method == http.MethodPost {
 				updateRequests++
 

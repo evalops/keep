@@ -10,10 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
-const (
-	initialCapacity = 0
-)
-
 // SSMManager implements secret management using AWS Systems Manager Parameter Store
 type SSMManager struct {
 	client *ssm.Client
