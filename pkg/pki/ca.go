@@ -50,6 +50,7 @@ type CertificateAuthority struct {
 	keyPath  string
 }
 
+// LoadOrCreateCA loads an existing CA or creates a new one if files don't exist
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
 	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadExecute); err != nil {
 		return nil, err

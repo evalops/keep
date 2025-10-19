@@ -362,27 +362,9 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 	headers := toLowerKeys(req.Attributes.Request.HTTP.Headers)
 	authHeader := headers["authorization"]
 	deviceID, subject := extractDeviceContext(headers)
-	clientIP := headers["x-forwarded-for"]
-	if clientIP == "" {
-		clientIP = headers["x-envoy-external-address"]
-	}
-	if clientIP == "" {
-		clientIP = headers["x-real-ip"]
-	}
+	clientIP := extractClientIP(headers)
 
-	if authHeader == "" {
-		http.Error(w, "missing token", http.StatusUnauthorized)
-		return
-	}
-
-	const prefix = "Bearer "
-	if !strings.HasPrefix(authHeader, prefix) {
-		http.Error(w, "invalid token", http.StatusUnauthorized)
-		return
-	}
-
-	tok := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
-	claims, err := token.VerifyGoogleJWT(r.Context(), tok, s.cfg.GoogleClientID)
+	claims, err := s.validateBearerToken(r.Context(), authHeader)
 	if err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -977,4 +959,31 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), status)
 
 	return result["status"] == statusVerified, nil
+}
+
+// extractClientIP extracts the client IP from various possible headers
+func extractClientIP(headers map[string]string) string {
+	clientIP := headers["x-forwarded-for"]
+	if clientIP == "" {
+		clientIP = headers["x-envoy-external-address"]
+	}
+	if clientIP == "" {
+		clientIP = headers["x-real-ip"]
+	}
+	return clientIP
+}
+
+// validateBearerToken validates and parses a Bearer token from the Authorization header
+func (s *Server) validateBearerToken(ctx context.Context, authHeader string) (map[string]interface{}, error) {
+	if authHeader == "" {
+		return nil, errors.New("missing token")
+	}
+
+	const prefix = "Bearer "
+	if !strings.HasPrefix(authHeader, prefix) {
+		return nil, errors.New("invalid token format")
+	}
+
+	tok := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
+	return token.VerifyGoogleJWT(ctx, tok, s.cfg.GoogleClientID)
 }
