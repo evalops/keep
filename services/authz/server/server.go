@@ -724,7 +724,7 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 	}
 
 	return telemetry.WrapClient(&http.Client{
-		Timeout:   3 * time.Second,
+		Timeout:   defaultInventoryTimeout,
 		Transport: transport,
 	}), nil
 }

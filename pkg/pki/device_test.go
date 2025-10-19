@@ -18,6 +18,7 @@ const (
 	benchKeyName       = "bench.key"
 	msgGenerateKeyFail = "Failed to generate key: %v"
 	testDeviceCN       = "test-device"
+	testCAName         = "test-ca"
 )
 
 func TestGenerateSigningKey(t *testing.T) {
@@ -429,7 +430,7 @@ func TestCertificateExpiry(t *testing.T) {
 		certPath := filepath.Join(tmpDir, "ca.pem")
 		keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
-		ca, err := LoadOrCreateCA(certPath, keyPath, "test-ca", 24*time.Hour)
+		ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, 24*time.Hour)
 		if err != nil {
 			t.Fatalf("Failed to create CA: %v", err)
 		}

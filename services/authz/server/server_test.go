@@ -21,6 +21,11 @@ const (
 	decisionKey            = "decision"
 	testRejectsNonPOST     = "rejects non-POST methods"
 	testRejectsInvalidJSON = "rejects invalid JSON"
+	testCSR                = "test-csr"
+	testUserIP             = "192.168.1.1"
+	testInventoryHost      = "test-inventory:8080"
+	testOPAHost            = "test-opa:8181"
+	testAuthzPort          = ":8443"
 )
 
 // TestServer_healthHandler tests the health endpoint
@@ -80,7 +85,7 @@ func TestServer_verifyHandler(t *testing.T) {
 		reqBody := verifyRequest{
 			Token:    "invalid.jwt.token",
 			DeviceID: testDeviceID,
-			ClientIP: "192.168.1.1",
+			ClientIP: testUserIP,
 		}
 		body, err := json.Marshal(reqBody)
 		if err != nil {
@@ -137,10 +142,10 @@ func TestServer_tailscaleStatusHandler(t *testing.T) {
 // createTestServer creates a minimal server for testing
 func createTestServer(_ *testing.T) *Server {
 	cfg := Config{
-		HTTPAddr:       ":8443",
+		HTTPAddr:       testAuthzPort,
 		GoogleClientID: "test-client-id",
-		OPAURL:         "http://test-opa:8181",
-		InventoryAPI:   "http://test-inventory:8080",
+		OPAURL:         "http://" + testOPAHost,
+		InventoryAPI:   "http://" + testInventoryHost,
 	}
 
 	return &Server{
@@ -217,7 +222,7 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 				"request": map[string]interface{}{
 					"http": map[string]interface{}{
 						"headers": map[string]string{
-							"x-device-id": "test-device",
+							"x-device-id": testDeviceID,
 						},
 					},
 				},
@@ -408,7 +413,7 @@ func TestServer_evaluateOPA(t *testing.T) {
 // createTestServerWithMocks creates a test server with mock OPA and inventory URLs
 func createTestServerWithMocks(_ *testing.T, opaURL, inventoryURL string) *Server {
 	cfg := Config{
-		HTTPAddr:       ":8443",
+		HTTPAddr:       testAuthzPort,
 		GoogleClientID: "test-client-id",
 		OPAURL:         opaURL,
 		InventoryAPI:   inventoryURL,
@@ -540,7 +545,7 @@ func TestServer_deviceCertHandler(t *testing.T) {
 	t.Run("rejects empty device ID", func(t *testing.T) {
 		reqBody := map[string]string{
 			"device_id": "",
-			"csr":       "test-csr",
+			"csr":       testCSR,
 		}
 		body, err := json.Marshal(reqBody)
 		if err != nil {
