@@ -1,10 +1,9 @@
 import logging
 import time
 from contextlib import contextmanager
-from typing import Generator, Dict, Any, Tuple
-from flask import Response
+from typing import Any, Dict, Generator, Tuple
 
-from flask import Flask, jsonify, request
+from flask import Flask, Response, jsonify, request
 
 from app.telemetry import setup as telemetry_setup
 

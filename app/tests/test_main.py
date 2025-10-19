@@ -1,5 +1,6 @@
+from typing import Any, Generator
+
 import pytest
-from typing import Generator, Any
 
 from app.main import app
 
