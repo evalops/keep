@@ -1,14 +1,21 @@
 import logging
 import time
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, Tuple
+from typing import Any, Callable, Dict, Generator, Tuple, TypeVar, cast
 
 from flask import Flask, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 
 from app.telemetry import setup as telemetry_setup
 
 app = Flask(__name__)
 telemetry_setup(app, service_name="keep-app")
+
+F = TypeVar("F", bound=Callable[..., ResponseReturnValue])
+
+
+def route(rule: str, **options: Any) -> Callable[[F], F]:
+    return cast(Callable[[F], F], app.route(rule, **options))
 
 
 @contextmanager
@@ -24,13 +31,13 @@ def record_route_metrics(route: str) -> Generator[None, None, None]:
         )
 
 
-@app.route("/health")
+@route("/health")
 def health() -> Dict[str, str]:
     with record_route_metrics("health"):
         return {"status": "ok"}
 
 
-@app.route("/")
+@route("/")
 def index() -> str:
     with record_route_metrics("index"):
         cert_subject = request.headers.get("X-Client-Subject", "unknown") or "unknown"
@@ -44,7 +51,7 @@ def index() -> str:
         )
 
 
-@app.route("/step-up", methods=["POST"])
+@route("/step-up", methods=["POST"])
 def step_up() -> Tuple[Response, int]:
     with record_route_metrics("step_up"):
         return jsonify({"status": "step-up required"}), 202
