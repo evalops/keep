@@ -99,7 +99,7 @@ func (*WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 		ruleOutput, err := runCommand("netsh", "advfirewall", "firewall", "show", "rule", "name=all")
 		if err == nil {
 			lines := strings.Split(ruleOutput, newlineSeparator)
-			ruleCount := 0
+			ruleCount := initialCapacity
 			for _, line := range lines {
 				if strings.HasPrefix(strings.TrimSpace(line), RuleNamePrefix) {
 					ruleCount++
@@ -142,7 +142,7 @@ func (*WindowsCollector) checkSystemUpdated() bool {
 		"Get-WUList -MicrosoftUpdate | Measure-Object | Select-Object -ExpandProperty Count")
 	if err == nil {
 		count := parseInt(strings.TrimSpace(output))
-		return count == 0 // No pending updates
+		return count == initialCapacity // No pending updates
 	}
 
 	// Fallback: check Windows Update service

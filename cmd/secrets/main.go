@@ -87,7 +87,7 @@ func main() {
 		handleGet(ctx, manager, *key, *format)
 
 	case actionSet:
-		if *key == "" || *value == "" {
+		if *key == emptyString || *value == emptyString {
 			log.Fatal(logMissingKeyValue)
 		}
 		handleSet(ctx, manager, *key, *value)
