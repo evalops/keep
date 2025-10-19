@@ -57,8 +57,17 @@ const (
 	errDecodeRequest         = "bad request"
 	errMissingMFAParams      = "missing MFA parameters"
 	errMethodNotAllowed      = "method not allowed"
+	
+	// Tailscale network constants
+	tailscaleIP1   = 100
+	tailscaleIP2   = 64
+	tailscaleIP3   = 0
+	tailscaleIP4   = 0
+	tailscaleCIDR  = 10
+	ipv4Bits       = 32
 )
 
+// Server implements the authorization service with OPA policy evaluation
 type Server struct {
 	cfg        Config
 	httpSrv    *http.Server
@@ -793,8 +802,8 @@ func (s *Server) validateTailscaleAccess(r *http.Request) bool {
 
 	// Tailscale uses the 100.64.0.0/10 CGNAT range
 	tailscaleNet := &net.IPNet{
-		IP:   net.IPv4(100, 64, 0, 0),
-		Mask: net.CIDRMask(10, 32),
+		IP:   net.IPv4(tailscaleIP1, tailscaleIP2, tailscaleIP3, tailscaleIP4),
+		Mask: net.CIDRMask(tailscaleCIDR, ipv4Bits),
 	}
 
 	return tailscaleNet.Contains(ip)
