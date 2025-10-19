@@ -106,7 +106,9 @@ func (s *Service) Start() error {
 
 	// Handle daemon mode
 	if s.config.Daemonize {
-		s.daemonize()
+		if err := s.daemonize(); err != nil {
+			return fmt.Errorf("failed to daemonize: %w", err)
+		}
 	}
 
 	// Write PID file
@@ -437,9 +439,9 @@ func (s *Service) removePIDFile() {
 }
 
 // daemonize runs the process in background (Unix-like systems)
-func (s *Service) daemonize() {
+func (s *Service) daemonize() error {
 	if s == nil {
-		return
+		return fmt.Errorf("service is nil")
 	}
 	// This is a simplified daemonization
 	// In production, you might want to use proper daemon libraries
@@ -447,11 +449,12 @@ func (s *Service) daemonize() {
 
 	if os.Getppid() == defaultSignalCapacity {
 		// Already daemonized
-		return
+		return nil
 	}
 
 	// Fork and exit parent
 	// Note: This is a basic implementation
 	// For robust daemonization, consider using libraries like
 	// github.com/sevlyar/go-daemon or systemd service files
+	return nil
 }

@@ -144,6 +144,9 @@ func New(cfg Config) (*Server, error) {
 		Multiplier:      defaultRetryMultiplier,
 		MaxInterval:     defaultMaxInterval,
 	}
+	if cfg.RetryMaxAttempts > 0 {
+		retryCfg.MaxAttempts = cfg.RetryMaxAttempts
+	}
 
 	// Configure inventory client with optional mTLS
 	invClient, err := configureInventoryClient(cfg)
