@@ -224,7 +224,7 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 	})
 
 	t.Run("uses default TTL when zero", func(t *testing.T) {
-		subject := pkix.Name{CommonName: "test-device"}
+		subject := pkix.Name{CommonName: testDeviceCN}
 
 		certPEM, err := ca.IssueCertificate(subject, nil, nil, 0, &priv.PublicKey)
 		if err != nil {
@@ -245,7 +245,7 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 	})
 
 	t.Run("handles invalid URI", func(t *testing.T) {
-		subject := pkix.Name{CommonName: "test-device"}
+		subject := pkix.Name{CommonName: testDeviceCN}
 		invalidURIs := []string{"not://a valid uri with spaces"}
 
 		_, err := ca.IssueCertificate(subject, invalidURIs, nil, time.Hour, &priv.PublicKey)

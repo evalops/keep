@@ -17,6 +17,7 @@ const (
 	testKeyName        = "test.key"
 	benchKeyName       = "bench.key"
 	msgGenerateKeyFail = "Failed to generate key: %v"
+	testDeviceCN       = "test-device"
 )
 
 func TestGenerateSigningKey(t *testing.T) {
@@ -441,7 +442,7 @@ func TestCertificateExpiry(t *testing.T) {
 
 		// Issue a certificate with known TTL
 		ttl := 2 * time.Hour
-		subject := pkix.Name{CommonName: "test-device"}
+		subject := pkix.Name{CommonName: testDeviceCN}
 		certPEM, err := ca.IssueCertificate(subject, nil, nil, ttl, &priv.PublicKey)
 		if err != nil {
 			t.Fatalf("Failed to issue certificate: %v", err)

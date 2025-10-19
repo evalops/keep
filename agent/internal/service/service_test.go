@@ -313,7 +313,7 @@ func TestService_obtainCertificate(t *testing.T) {
 					return
 				}
 
-				if req["device_id"] != "test-device" {
+				if req["device_id"] != testDeviceID {
 					t.Errorf("Expected device ID 'test-device', got %s", req["device_id"])
 				}
 
@@ -341,7 +341,7 @@ func TestService_obtainCertificate(t *testing.T) {
 		defer mockAuthz.Close()
 
 		config := &Config{
-			DeviceID:  "test-device",
+			DeviceID:  testDeviceID,
 			AttestURL: mockAuthz.URL,
 			CertPath:  filepath.Join(tmpDir, "device.crt"),
 			CAPath:    filepath.Join(tmpDir, "ca.pem"),
@@ -384,7 +384,7 @@ func TestService_obtainCertificate(t *testing.T) {
 		defer mockAuthz.Close()
 
 		config := &Config{
-			DeviceID:  "test-device",
+			DeviceID:  testDeviceID,
 			AttestURL: mockAuthz.URL,
 			CertPath:  filepath.Join(tmpDir, "device.crt"),
 			CAPath:    filepath.Join(tmpDir, "ca.pem"),
