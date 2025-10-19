@@ -229,8 +229,8 @@ func TestService_updatePosture(t *testing.T) {
 					return
 				}
 
-				if req.ID != "test-device" {
-					t.Errorf("Expected device ID 'test-device', got %s", req.ID)
+				if req.ID != testDeviceID {
+					t.Errorf("Expected device ID %q, got %s", testDeviceID, req.ID)
 				}
 
 				if req.Posture == "" {

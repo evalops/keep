@@ -19,8 +19,13 @@ func TestLoadOrCreateCA(t *testing.T) {
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
+	const (
+		testCAName    = "test-ca"
+		testCADefault = "test-ca-default"
+	)
+
 	t.Run("creates new CA when files don't exist", func(t *testing.T) {
-		ca, err := LoadOrCreateCA(certPath, keyPath, "test-ca", time.Hour*24*365)
+		ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24*365)
 		if err != nil {
 			t.Fatalf("LoadOrCreateCA failed: %v", err)
 		}
@@ -34,8 +39,8 @@ func TestLoadOrCreateCA(t *testing.T) {
 		}
 
 		// Verify certificate properties
-		if ca.cert.Subject.CommonName != "test-ca" {
-			t.Errorf("Expected CommonName 'test-ca', got %s", ca.cert.Subject.CommonName)
+		if ca.cert.Subject.CommonName != testCAName {
+			t.Errorf("Expected CommonName %q, got %s", testCAName, ca.cert.Subject.CommonName)
 		}
 		if !ca.cert.IsCA {
 			t.Error("Certificate should be a CA")
@@ -53,8 +58,8 @@ func TestLoadOrCreateCA(t *testing.T) {
 		}
 
 		// Should load existing CA, not create new one with different name
-		if ca2.cert.Subject.CommonName != "test-ca" {
-			t.Errorf("Expected existing CommonName 'test-ca', got %s", ca2.cert.Subject.CommonName)
+		if ca2.cert.Subject.CommonName != testCAName {
+			t.Errorf("Expected existing CommonName %q, got %s", testCAName, ca2.cert.Subject.CommonName)
 		}
 	})
 
@@ -63,7 +68,7 @@ func TestLoadOrCreateCA(t *testing.T) {
 		certPath2 := filepath.Join(tmpDir2, "ca.pem")
 		keyPath2 := filepath.Join(tmpDir2, "ca-key.pem")
 
-		ca, err := LoadOrCreateCA(certPath2, keyPath2, "test-ca-default", 0)
+		ca, err := LoadOrCreateCA(certPath2, keyPath2, testCADefault, 0)
 		if err != nil {
 			t.Fatalf("LoadOrCreateCA failed: %v", err)
 		}
@@ -153,7 +158,7 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
-	ca, err := LoadOrCreateCA(certPath, keyPath, "test-ca", time.Hour*24)
+	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24)
 	if err != nil {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
@@ -249,7 +254,7 @@ func TestCertificateAuthority_SignCSR(t *testing.T) {
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
-	ca, err := LoadOrCreateCA(certPath, keyPath, "test-ca", time.Hour*24)
+	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24)
 	if err != nil {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
@@ -377,7 +382,7 @@ func TestCertificateAuthority_CertificatePEM(t *testing.T) {
 	certPath := filepath.Join(tmpDir, "ca.pem")
 	keyPath := filepath.Join(tmpDir, "ca-key.pem")
 
-	ca, err := LoadOrCreateCA(certPath, keyPath, "test-ca", time.Hour*24)
+	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24)
 	if err != nil {
 		t.Fatalf("Failed to create CA: %v", err)
 	}
@@ -404,8 +409,8 @@ func TestCertificateAuthority_CertificatePEM(t *testing.T) {
 			t.Errorf("Failed to parse certificate from PEM: %v", err)
 		}
 
-		if cert.Subject.CommonName != "test-ca" {
-			t.Errorf("Expected CommonName 'test-ca', got %s", cert.Subject.CommonName)
+		if cert.Subject.CommonName != testCAName {
+			t.Errorf("Expected CommonName %q, got %s", testCAName, cert.Subject.CommonName)
 		}
 	})
 }

@@ -5,6 +5,15 @@ import (
 	"strings"
 )
 
+const (
+	newlineSeparator     = "\n"
+	ruleNamePrefix       = "Rule Name:"
+	displayNamePrefix    = "displayName="
+	displayNamePrefixLen = len(displayNamePrefix)
+	powershellCmd        = "powershell"
+	powershellFlag       = "-Command"
+)
+
 // WindowsCollector collects device posture on Windows systems
 type WindowsCollector struct{}
 
@@ -48,7 +57,7 @@ func (c *WindowsCollector) collectOSInfo(os *OperatingSystem) error {
 		return err
 	}
 
-	lines := strings.Split(output, "\n")
+	lines := strings.Split(output, newlineSeparator)
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -90,10 +99,10 @@ func (c *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	if fw.Enabled {
 		ruleOutput, err := runCommand("netsh", "advfirewall", "firewall", "show", "rule", "name=all")
 		if err == nil {
-			lines := strings.Split(ruleOutput, "\n")
+			lines := strings.Split(ruleOutput, newlineSeparator)
 			ruleCount := 0
 			for _, line := range lines {
-				if strings.HasPrefix(strings.TrimSpace(line), "Rule Name:") {
+				if strings.HasPrefix(strings.TrimSpace(line), ruleNamePrefix) {
 					ruleCount++
 				}
 			}
@@ -107,7 +116,7 @@ func (c *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 // checkAntiVirus checks Windows Defender and other antivirus software
 func (c *WindowsCollector) checkAntiVirus() bool {
 	// Check Windows Defender status
-	output, err := runCommand("powershell", "-Command", "Get-MpComputerStatus | Select-Object AntivirusEnabled")
+	output, err := runCommand(powershellCmd, powershellFlag, "Get-MpComputerStatus | Select-Object AntivirusEnabled")
 	if err == nil && strings.Contains(strings.ToLower(output), "true") {
 		return true
 	}
@@ -115,10 +124,10 @@ func (c *WindowsCollector) checkAntiVirus() bool {
 	// Check for other antivirus software using WMI
 	output, err = runCommand("wmic", "/namespace:\\\\root\\SecurityCenter2", "path", "AntiVirusProduct", "get", "displayName", "/format:list")
 	if err == nil {
-		lines := strings.Split(output, "\n")
+		lines := strings.Split(output, newlineSeparator)
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "displayName=") && len(line) > 12 {
+			if strings.HasPrefix(line, displayNamePrefix) && len(line) > displayNamePrefixLen {
 				return true // Found antivirus software
 			}
 		}
@@ -130,7 +139,7 @@ func (c *WindowsCollector) checkAntiVirus() bool {
 // checkSystemUpdated checks Windows Update status
 func (c *WindowsCollector) checkSystemUpdated() bool {
 	// Check for pending updates using PowerShell
-	output, err := runCommand("powershell", "-Command",
+	output, err := runCommand(powershellCmd, powershellFlag,
 		"Get-WUList -MicrosoftUpdate | Measure-Object | Select-Object -ExpandProperty Count")
 	if err == nil {
 		count := parseInt(strings.TrimSpace(output))
@@ -183,7 +192,7 @@ func (c *WindowsCollector) checkScreenLock() bool {
 	}
 
 	// Check lock screen settings
-	output, err = runCommand("powershell", "-Command",
+	output, err = runCommand(powershellCmd, powershellFlag,
 		"Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name DisableCAD -ErrorAction SilentlyContinue")
 	if err == nil && !strings.Contains(output, "1") {
 		return true // Ctrl+Alt+Del required (indicates password policy)

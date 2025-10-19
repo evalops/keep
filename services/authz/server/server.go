@@ -418,16 +418,16 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 
 	start := time.Now()
 	var resp *http.Response
-	var callErr error
 	retryErr := retry.Do(ctx, s.retryCfg, func() error {
-		resp, callErr = s.client.Do(req)
-		if callErr != nil {
-			return callErr
+		r, err := s.client.Do(req)
+		if err != nil {
+			return err
 		}
-		if resp.StatusCode >= 500 {
-			_ = resp.Body.Close()
-			return fmt.Errorf("opa temporary error: %d", resp.StatusCode)
+		if r.StatusCode >= 500 {
+			_ = r.Body.Close()
+			return fmt.Errorf("opa temporary error: %d", r.StatusCode)
 		}
+		resp = r
 		return nil
 	})
 	if retryErr != nil {
@@ -516,61 +516,61 @@ func parseXFCC(xfcc string) string {
 
 func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]any {
 	if deviceID == "" || s.cfg.InventoryAPI == "" {
-		return map[string]any{"id": deviceID, "posture": "unknown"}
+		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/v1/devices/%s", s.cfg.InventoryAPI, deviceID), nil)
 	if err != nil {
 		log.Printf("inventory request build failed: %v", err)
-		return map[string]any{"id": deviceID, "posture": "unknown"}
+		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 
 	start := time.Now()
 	var resp *http.Response
-	var callErr error
 	retryErr := retry.Do(ctx, s.retryCfg, func() error {
-		resp, callErr = s.invClient.Do(req)
-		if callErr != nil {
-			return callErr
+		r, err := s.invClient.Do(req)
+		if err != nil {
+			return err
 		}
-		if resp.StatusCode >= 500 {
-			_ = resp.Body.Close()
-			return fmt.Errorf("inventory temporary error: %d", resp.StatusCode)
+		if r.StatusCode >= 500 {
+			_ = r.Body.Close()
+			return fmt.Errorf("inventory temporary error: %d", r.StatusCode)
 		}
+		resp = r
 		return nil
 	})
 	if retryErr != nil {
 		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "error")
 		log.Printf("inventory request failed: %v", retryErr)
-		return map[string]any{"id": deviceID, "posture": "unknown"}
+		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
 		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "404")
-		return map[string]any{"id": deviceID, "posture": "unregistered"}
+		return map[string]any{"id": deviceID, "posture": statusUnregistered}
 	}
 	if resp.StatusCode != http.StatusOK {
 		b, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
 			telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 			log.Printf("inventory error %d: failed to read body: %v", resp.StatusCode, readErr)
-			return map[string]any{"id": deviceID, "posture": "unknown"}
+			return map[string]any{"id": deviceID, "posture": statusUnknown}
 		}
 		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), fmt.Sprintf("%d", resp.StatusCode))
 		log.Printf("inventory error %d: %s", resp.StatusCode, string(b))
-		return map[string]any{"id": deviceID, "posture": "unknown"}
+		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 
 	var device inventoryDevice
 	if err := json.NewDecoder(resp.Body).Decode(&device); err != nil {
 		telemetry.RecordDependencyRequest(ctx, "authz", "inventory", "lookup", time.Since(start), "decode_error")
 		log.Printf("inventory decode failed: %v", err)
-		return map[string]any{"id": deviceID, "posture": "unknown"}
+		return map[string]any{"id": deviceID, "posture": statusUnknown}
 	}
 
 	if device.Posture == "" {
-		device.Posture = "unknown"
+		device.Posture = statusUnknown
 	}
 
 	// Parse posture JSON to extract trust score
@@ -913,16 +913,16 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 
 	start := time.Now()
 	var resp *http.Response
-	var callErr error
 	retryErr := retry.Do(ctx, s.retryCfg, func() error {
-		resp, callErr = s.client.Do(req)
-		if callErr != nil {
-			return callErr
+		r, err := s.client.Do(req)
+		if err != nil {
+			return err
 		}
-		if resp.StatusCode >= 500 {
-			_ = resp.Body.Close()
-			return fmt.Errorf("mfa temporary error: %d", resp.StatusCode)
+		if r.StatusCode >= 500 {
+			_ = r.Body.Close()
+			return fmt.Errorf("mfa temporary error: %d", r.StatusCode)
 		}
+		resp = r
 		return nil
 	})
 	if retryErr != nil {
