@@ -17,9 +17,12 @@ import (
 )
 
 const (
-	testDeviceID    = "test-device"
-	initialCapacity = 0
-	pidFileMode     = 0o600
+	testDeviceID       = "test-device"
+	initialCapacity    = 0
+	pidFileMode        = 0o600
+	testInventoryPort  = ":8081"
+	testAttestPort     = ":8443"
+	testPIDContent     = "12345\n"
 )
 
 // mockPostureCollector implements the posture.Collector interface for testing
@@ -48,8 +51,8 @@ func TestService_New(t *testing.T) {
 	t.Run("creates service with valid config", func(t *testing.T) {
 		config := &Config{
 			DeviceID:        testDeviceID,
-			InventoryURL:    "http://localhost:8081",
-			AttestURL:       "http://localhost:8443",
+			InventoryURL:    "http://localhost" + testInventoryPort,
+			AttestURL:       "http://localhost" + testAttestPort,
 			KeyPath:         "/tmp/test.key",
 			CertPath:        "/tmp/test.crt",
 			CAPath:          "/tmp/ca.pem",
@@ -445,7 +448,7 @@ func TestService_removePIDFile(t *testing.T) {
 	pidFile := filepath.Join(tmpDir, "test.pid")
 
 	// Create PID file
-	err := os.WriteFile(pidFile, []byte("12345\n"), pidFileMode)
+	err := os.WriteFile(pidFile, []byte(testPIDContent), pidFileMode)
 	if err != nil {
 		t.Fatalf("Failed to create test PID file: %v", err)
 	}
