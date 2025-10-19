@@ -153,11 +153,6 @@ func createTestServer(t *testing.T) *Server {
 
 // TestServer_envoyAuthHandler tests the Envoy auth handler
 func TestServer_envoyAuthHandler(t *testing.T) {
-	const (
-		testDeviceID       = "test-device"
-		testAllowPath      = "/v1/data/keep/allow"
-		testClientRemoteIP = "100.65.1.1:12345"
-	)
 	// Create mock OPA server
 	mockOPA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == testAllowPath && r.Method == http.MethodPost {
@@ -437,7 +432,7 @@ func TestServer_lookupDevice(t *testing.T) {
 		result := server.lookupDevice(context.Background(), testDeviceID)
 
 		expected := map[string]any{
-			"id":      "test-device",
+			"id":      testDeviceID,
 			"posture": "unknown",
 		}
 
@@ -511,7 +506,7 @@ func TestServer_lookupDevice(t *testing.T) {
 
 		server := createTestServerWithMocks(t, "", mockInventory.URL)
 
-		result := server.lookupDevice(ctx, "test-device")
+		result := server.lookupDevice(ctx, testDeviceID)
 
 		if result["posture"] != "unknown" {
 			t.Errorf("Expected posture 'unknown' for service error, got %v", result["posture"])
