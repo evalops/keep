@@ -18,7 +18,8 @@ type SSMManager struct {
 
 // NewSSMManager creates a new SSM-based secret manager
 func NewSSMManager(cfg Config) (*SSMManager, error) {
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(), func(o *config.LoadOptions) error {
+	ctx := context.Background()
+	awsConfig, err := config.LoadDefaultConfig(ctx, func(o *config.LoadOptions) error {
 		if cfg.Region != "" {
 			o.Region = cfg.Region
 		}
