@@ -19,7 +19,7 @@ func TestBuildRSAPublicKey(t *testing.T) {
 
 func TestSplitToken(t *testing.T) {
 	parts := splitToken("a.b.c")
-	if len(parts) != 3 {
+	if len(parts) != jwtPartCount {
 		t.Fatalf("expected 3 parts, got %d", len(parts))
 	}
 }

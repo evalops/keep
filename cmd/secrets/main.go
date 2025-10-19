@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	emptyString   = ""
 	actionGet     = "get"
 	actionSet     = "set"
 	actionList    = "list"
@@ -69,7 +70,7 @@ func main() {
 	if cfg.Region == "" {
 		cfg.Region = os.Getenv(envSecretRegion)
 	}
-	if cfg.Prefix == "" {
+	if cfg.Prefix == emptyString {
 		cfg.Prefix = os.Getenv(envSecretPrefix)
 	}
 
