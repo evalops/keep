@@ -1,23 +1,23 @@
 import os
 import time
-from typing import Any, Callable, Optional, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar
 from urllib.parse import quote_plus
 
 import pytest
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 
-F = TypeVar("F", bound=Callable[..., object])
+if TYPE_CHECKING:
+    F = TypeVar("F", bound=Callable[..., object])
 
+    def typed_fixture(*args: Any, **kwargs: Any) -> Callable[[F], F]:
+        def decorator(func: F) -> F:
+            return func
 
-def typed_fixture(*args: Any, **kwargs: Any) -> Callable[[F], F]:
-    """Typed veneer over pytest.fixture to keep mypy happy while preserving runtime behavior."""
-    fixture_factory = pytest.fixture(*args, **kwargs)
+        return decorator
 
-    def decorator(func: F) -> F:
-        return cast(F, fixture_factory(func))
-
-    return decorator
+else:
+    typed_fixture = pytest.fixture
 
 
 TRANSIENT_CODES = {
