@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	// Register pgx driver for database/sql usage
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/EvalOps/keep/pkg/telemetry"
@@ -248,20 +249,6 @@ type Device struct {
 	Posture     string    `json:"posture"`
 	Registered  time.Time `json:"registered_at"`
 	LastUpdated time.Time `json:"last_updated"`
-}
-
-// ensureSchema is deprecated - use golang-migrate tool instead
-// Keeping this function for backward compatibility in tests
-func ensureSchema(db *sql.DB) error {
-	_, err := db.Exec(`
-	CREATE TABLE IF NOT EXISTS devices (
-		id TEXT PRIMARY KEY,
-		public_key TEXT NOT NULL,
-		posture TEXT NOT NULL DEFAULT 'healthy',
-		registered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-		last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
-	)`)
-	return err
 }
 
 func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {
