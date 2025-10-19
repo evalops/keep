@@ -23,6 +23,8 @@ const (
 	defaultMaxInterval     = 30 * time.Second
 	minMultiplier          = 0.1
 	minInterval            = 10 * time.Millisecond
+	defaultElapsedTime     = 0
+	minAttempts            = 0
 )
 
 func (c *Config) backoff() backoff.BackOff {
@@ -42,7 +44,7 @@ func (c *Config) backoff() backoff.BackOff {
 	} else {
 		bo.Multiplier = defaultMultiplier
 	}
-	if c.MaxElapsedTime > 0 {
+	if c.MaxElapsedTime > defaultElapsedTime {
 		bo.MaxElapsedTime = c.MaxElapsedTime
 	}
 	bo.Reset()
@@ -52,7 +54,7 @@ func (c *Config) backoff() backoff.BackOff {
 // Do executes fn with retries until success or context cancellation.
 func Do(ctx context.Context, cfg Config, fn func() error) error {
 	bo := backoff.WithContext(cfg.backoff(), ctx)
-	attempts := 0
+	attempts := minAttempts
 	return backoff.Retry(func() error {
 		if cfg.MaxAttempts > 0 {
 			if attempts >= cfg.MaxAttempts {
