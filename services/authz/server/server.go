@@ -155,38 +155,7 @@ func New(cfg Config) (*Server, error) {
 		retryCfg:   retryCfg,
 	}
 
-	// Create chi router with middleware
-	r := chi.NewRouter()
-	telemetry.InstrumentRouter(r, "authz")
-
-	// Add middleware
-	r.Use(middleware.RequestID)
-	r.Use(s.loggingMiddleware)
-	r.Use(s.metricsMiddleware)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(defaultReadTimeout))
-
-	// Health and metrics endpoints
-	r.Get("/health", s.healthHandler)
-	r.Get("/metrics", promhttp.Handler().ServeHTTP)
-
-	// API routes
-	r.Route("/v1", func(r chi.Router) {
-		r.Route("/auth", func(r chi.Router) {
-			r.Post("/verify", s.verifyHandler)
-			r.Post("/check", s.envoyAuthHandler)
-			r.Post("/mfa/verify-envoy", s.mfaVerifyHandler)
-		})
-
-		r.Route("/certs", func(r chi.Router) {
-			r.Post("/device", s.deviceCertHandler)
-			r.Get("/ca", s.caHandler)
-		})
-
-		r.Route("/tailscale", func(r chi.Router) {
-			r.Get("/status", s.tailscaleStatusHandler)
-		})
-	})
+	r := s.setupRouter()
 
 	useTLS := cfg.TLSCertPath != emptyString && cfg.TLSKeyPath != emptyString
 	if useTLS {
@@ -314,9 +283,8 @@ func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 		"tailscale": s.getTailscaleInfo(),
 	}
 
-	w.Header().Set(contentTypeHeader, applicationJSON)
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(health); err != nil {
+	if err := writeJSONResponse(w, health); err != nil {
 		log.Printf("failed to encode health response: %v", err)
 	}
 }
@@ -355,7 +323,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := json.NewEncoder(w).Encode(verifyResponse{Decision: decision}); err != nil {
+	if err := writeJSONResponse(w, verifyResponse{Decision: decision}); err != nil {
 		log.Printf("failed to encode verify response: %v", err)
 	}
 }
@@ -418,7 +386,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 			"device_id":  deviceID,
 			"session_id": middleware.GetReqID(r.Context()),
 		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
+		if err := writeJSONResponse(w, response); err != nil {
 			log.Printf("failed to encode envoy auth response: %v", err)
 		}
 	default:
@@ -663,7 +631,7 @@ func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := json.NewEncoder(w).Encode(map[string]any{"certificate": string(certPEM)}); err != nil {
+	if err := writeJSONResponse(w, map[string]any{"certificate": string(certPEM)}); err != nil {
 		log.Printf("failed to encode device cert response: %v", err)
 	}
 }
@@ -829,9 +797,8 @@ func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	status := s.getTailscaleInfo()
-	w.Header().Set(contentTypeHeader, applicationJSON)
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(status); err != nil {
+	if err := writeJSONResponse(w, status); err != nil {
 		log.Printf("failed to encode tailscale status: %v", err)
 	}
 }
@@ -1008,4 +975,47 @@ func (s *Server) validateBearerToken(ctx context.Context, authHeader string) (ma
 
 	tok := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
 	return token.VerifyGoogleJWT(ctx, tok, s.cfg.GoogleClientID)
+}
+
+// setupRouter configures the chi router with middleware and routes
+func (s *Server) setupRouter() chi.Router {
+	r := chi.NewRouter()
+	telemetry.InstrumentRouter(r, "authz")
+
+	// Add middleware
+	r.Use(middleware.RequestID)
+	r.Use(s.loggingMiddleware)
+	r.Use(s.metricsMiddleware)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(defaultReadTimeout))
+
+	// Health and metrics endpoints
+	r.Get("/health", s.healthHandler)
+	r.Get("/metrics", promhttp.Handler().ServeHTTP)
+
+	// API routes
+	r.Route("/v1", func(r chi.Router) {
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/verify", s.verifyHandler)
+			r.Post("/check", s.envoyAuthHandler)
+			r.Post("/mfa/verify-envoy", s.mfaVerifyHandler)
+		})
+
+		r.Route("/certs", func(r chi.Router) {
+			r.Post("/device", s.deviceCertHandler)
+			r.Get("/ca", s.caHandler)
+		})
+
+		r.Route("/tailscale", func(r chi.Router) {
+			r.Get("/status", s.tailscaleStatusHandler)
+		})
+	})
+	
+	return r
+}
+
+// writeJSONResponse writes a JSON response with proper headers
+func writeJSONResponse(w http.ResponseWriter, data interface{}) error {
+	w.Header().Set(contentTypeHeader, applicationJSON)
+	return json.NewEncoder(w).Encode(data)
 }
