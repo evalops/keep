@@ -176,7 +176,7 @@ func (c *LinuxCollector) checkSystemUpdated() bool {
 	}
 
 	// Try yum/dnf for Red Hat systems
-	output, err := runCommand("yum", "check-update")
+	output, err = runCommand("yum", "check-update")
 	if err != nil {
 		// Exit code 0 means no updates, 100 means updates available
 		return true

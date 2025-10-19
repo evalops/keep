@@ -7,10 +7,6 @@ import (
 	"strings"
 )
 
-const (
-	emptyString = ""
-)
-
 // Manager defines the interface for secret management
 type Manager interface {
 	GetSecret(ctx context.Context, key string) (string, error)
