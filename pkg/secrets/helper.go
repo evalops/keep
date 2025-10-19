@@ -129,7 +129,7 @@ func (h *Helper) LoadAPIKeys() map[string]string {
 }
 
 // BuildDSN builds a database connection string from secret values
-func (h *Helper) BuildDSN(dbConfig map[string]string) (string, error) {
+func BuildDSN(dbConfig map[string]string) (string, error) {
 	password, ok := dbConfig["POSTGRES_PASSWORD"]
 	if !ok || password == "" {
 		return "", fmt.Errorf("POSTGRES_PASSWORD is required")

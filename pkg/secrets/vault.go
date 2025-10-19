@@ -169,7 +169,7 @@ func (m *VaultManager) GetSecrets(ctx context.Context, keys []string) (map[strin
 }
 
 // SetSecret stores a secret in Vault
-func (m *VaultManager) SetSecret(ctx context.Context, key, value string) error {
+func (m *VaultManager) SetSecret(_ context.Context, key, value string) error {
 	secretPath := m.buildSecretPath(key)
 
 	data := map[string]interface{}{

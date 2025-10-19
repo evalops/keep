@@ -17,16 +17,30 @@ type Config struct {
 	MaxAttempts     int
 }
 
+const (
+	defaultMultiplier      = 1.5
+	defaultInitialInterval = 500 * time.Millisecond
+	defaultMaxInterval     = 30 * time.Second
+	minMultiplier          = 0.1
+	minInterval            = 10 * time.Millisecond
+)
+
 func (c *Config) backoff() backoff.BackOff {
 	bo := backoff.NewExponentialBackOff()
-	if c.InitialInterval > 0 {
+	if c.InitialInterval >= minInterval {
 		bo.InitialInterval = c.InitialInterval
+	} else {
+		bo.InitialInterval = defaultInitialInterval
 	}
-	if c.MaxInterval > 0 {
+	if c.MaxInterval >= minInterval {
 		bo.MaxInterval = c.MaxInterval
+	} else {
+		bo.MaxInterval = defaultMaxInterval
 	}
-	if c.Multiplier > 0 {
+	if c.Multiplier >= minMultiplier {
 		bo.Multiplier = c.Multiplier
+	} else {
+		bo.Multiplier = defaultMultiplier
 	}
 	if c.MaxElapsedTime > 0 {
 		bo.MaxElapsedTime = c.MaxElapsedTime

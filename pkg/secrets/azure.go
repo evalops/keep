@@ -73,7 +73,7 @@ func createAzureCredential(cfg Config) (azcore.TokenCredential, error) {
 
 // GetSecret retrieves a secret from Azure Key Vault
 func (m *AzureManager) GetSecret(ctx context.Context, key string) (string, error) {
-	secretName := m.normalizeSecretName(key)
+	secretName := normalizeSecretName(key)
 
 	// Get the latest version of the secret
 	resp, err := m.client.GetSecret(ctx, secretName, emptyString, nil)
@@ -105,7 +105,7 @@ func (m *AzureManager) GetSecrets(ctx context.Context, keys []string) (map[strin
 
 // SetSecret stores a secret in Azure Key Vault
 func (m *AzureManager) SetSecret(ctx context.Context, key, value string) error {
-	secretName := m.normalizeSecretName(key)
+	secretName := normalizeSecretName(key)
 
 	parameters := azsecrets.SetSecretParameters{
 		Value: &value,
@@ -121,7 +121,7 @@ func (m *AzureManager) SetSecret(ctx context.Context, key, value string) error {
 
 // normalizeSecretName ensures the secret name follows Azure Key Vault naming rules
 // Secret names can only contain alphanumeric characters and dashes
-func (m *AzureManager) normalizeSecretName(name string) string {
+func normalizeSecretName(name string) string {
 	// Replace invalid characters with dashes
 	normalized := strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == dashRune {
