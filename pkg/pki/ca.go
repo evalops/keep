@@ -12,32 +12,30 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
 type CertificateAuthority struct {
-	cert       *x509.Certificate
-	key        *ecdsa.PrivateKey
-	certPath   string
-	keyPath    string
-	serialLock sync.Mutex
+    cert     *x509.Certificate
+    key      *ecdsa.PrivateKey
+    certPath string
+    keyPath  string
 }
 
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
-	if err := os.MkdirAll(filepath.Dir(certPath), 0o750); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0o750); err != nil {
-		return nil, err
-	}
+    if err := os.MkdirAll(filepath.Dir(certPath), dirPermPrivate); err != nil {
+        return nil, err
+    }
+    if err := os.MkdirAll(filepath.Dir(keyPath), dirPermPrivate); err != nil {
+        return nil, err
+    }
 
 	if _, err := os.Stat(certPath); err == nil {
 		return LoadCA(certPath, keyPath)
 	}
 
 	if validFor == 0 {
-		validFor = 10 * 365 * 24 * time.Hour
+		validFor = defaultCAValidity
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -45,7 +43,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumberLimit := maxSerialNumber
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, err
@@ -57,7 +55,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 			CommonName:   commonName,
 			Organization: []string{"keep"},
 		},
-		NotBefore:             time.Now().Add(-5 * time.Minute),
+        NotBefore:             time.Now().Add(-defaultClockSkew),
 		NotAfter:              time.Now().Add(validFor),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,
@@ -127,7 +125,7 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 }
 
 func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), dirPermPrivate); err != nil {
 		return err
 	}
 
@@ -142,10 +140,10 @@ func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error
 
 func (c *CertificateAuthority) IssueCertificate(subject pkix.Name, uris []string, dnsNames []string, ttl time.Duration, publicKey any) ([]byte, error) {
 	if ttl == 0 {
-		ttl = 8 * time.Hour
+		ttl = defaultCertificateTTL
 	}
 
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	serial, err := rand.Int(rand.Reader, maxSerialNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -189,9 +187,9 @@ func (c *CertificateAuthority) SignCSR(csr *x509.CertificateRequest, ttl time.Du
 		return nil, err
 	}
 	if ttl == 0 {
-		ttl = 8 * time.Hour
+		ttl = defaultCertificateTTL
 	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	serial, err := rand.Int(rand.Reader, maxSerialNumber)
 	if err != nil {
 		return nil, err
 	}

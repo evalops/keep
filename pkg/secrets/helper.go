@@ -50,7 +50,7 @@ func NewHelperFromEnv() *Helper {
 // GetOrDefault gets a secret or returns the default value
 func (h *Helper) GetOrDefault(key, defaultValue string) string {
 	value, err := h.manager.GetSecret(h.ctx, key)
-	if err != nil || value == "" {
+	if err != nil || value == emptyString {
 		return defaultValue
 	}
 	return value
@@ -60,10 +60,10 @@ func (h *Helper) GetOrDefault(key, defaultValue string) string {
 func (h *Helper) GetRequired(key string) (string, error) {
 	value, err := h.manager.GetSecret(h.ctx, key)
 	if err != nil {
-		return "", err
+		return emptyString, err
 	}
-	if value == "" {
-		return "", fmt.Errorf("required secret not found: %s", key)
+	if value == emptyString {
+		return emptyString, fmt.Errorf("required secret not found: %s", key)
 	}
 	return value, nil
 }
@@ -87,7 +87,7 @@ func (h *Helper) GetMultipleOrDefaults(keyDefaults map[string]string) map[string
 
 	// Apply defaults for missing values
 	for key, defaultValue := range keyDefaults {
-		if value, ok := results[key]; !ok || value == "" {
+		if value, ok := results[key]; !ok || value == emptyString {
 			results[key] = defaultValue
 		}
 	}

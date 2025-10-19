@@ -14,8 +14,8 @@ import (
 )
 
 func TestGenerateSigningKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	keyPath := filepath.Join(tmpDir, "test.key")
+    tmpDir := t.TempDir()
+    keyPath := filepath.Join(tmpDir, testKeyName)
 
 	t.Run("generates valid ECDSA key", func(t *testing.T) {
 		priv, err := GenerateSigningKey(keyPath)
@@ -106,7 +106,7 @@ func TestGenerateSigningKey(t *testing.T) {
 
 func TestLoadSigningKey(t *testing.T) {
 	tmpDir := t.TempDir()
-	keyPath := filepath.Join(tmpDir, "test.key")
+    keyPath := filepath.Join(tmpDir, testKeyName)
 
 	t.Run("loads valid key", func(t *testing.T) {
 		// Generate a key first
@@ -201,13 +201,13 @@ invalidbase64data!!!
 
 func TestPublicKeyPEM(t *testing.T) {
 	tmpDir := t.TempDir()
-	keyPath := filepath.Join(tmpDir, "test.key")
+    keyPath := filepath.Join(tmpDir, testKeyName)
 
 	t.Run("converts to valid public key PEM", func(t *testing.T) {
-		priv, err := GenerateSigningKey(keyPath)
-		if err != nil {
-			t.Fatalf("Failed to generate key: %v", err)
-		}
+        priv, err := GenerateSigningKey(keyPath)
+        if err != nil {
+            t.Fatalf(msgGenerateKeyFail, err)
+        }
 
 		pubPEM, err := PublicKeyPEM(priv)
 		if err != nil {
@@ -246,10 +246,10 @@ func TestCreateCSR(t *testing.T) {
 	tmpDir := t.TempDir()
 	keyPath := filepath.Join(tmpDir, "test.key")
 
-	priv, err := GenerateSigningKey(keyPath)
-	if err != nil {
-		t.Fatalf("Failed to generate key: %v", err)
-	}
+    priv, err := GenerateSigningKey(keyPath)
+    if err != nil {
+        t.Fatalf(msgGenerateKeyFail, err)
+    }
 
 	t.Run("creates valid CSR", func(t *testing.T) {
 		deviceID := "test-device-123"
@@ -482,45 +482,45 @@ invalid certificate data
 
 // Benchmark tests
 func BenchmarkGenerateSigningKey(b *testing.B) {
-	tmpDir := b.TempDir()
+    tmpDir := b.TempDir()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		keyPath := filepath.Join(tmpDir, "bench.key")
-		_, err := GenerateSigningKey(keyPath)
-		if err != nil {
-			b.Fatalf("GenerateSigningKey failed: %v", err)
-		}
-		os.Remove(keyPath) // Clean up
-	}
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        keyPath := filepath.Join(tmpDir, benchKeyName)
+        _, err := GenerateSigningKey(keyPath)
+        if err != nil {
+            b.Fatalf("GenerateSigningKey failed: %v", err)
+        }
+        os.Remove(keyPath) // Clean up
+    }
 }
 
 func BenchmarkCreateCSR(b *testing.B) {
-	tmpDir := b.TempDir()
-	keyPath := filepath.Join(tmpDir, "bench.key")
+    tmpDir := b.TempDir()
+        keyPath := filepath.Join(tmpDir, benchKeyName)
 
-	priv, err := GenerateSigningKey(keyPath)
-	if err != nil {
-		b.Fatalf("Failed to generate key: %v", err)
-	}
+    priv, err := GenerateSigningKey(keyPath)
+    if err != nil {
+        b.Fatalf(msgGenerateKeyFail, err)
+    }
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := CreateCSR(priv, "bench-device")
-		if err != nil {
-			b.Fatalf("CreateCSR failed: %v", err)
-		}
-	}
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _, err := CreateCSR(priv, "bench-device")
+        if err != nil {
+            b.Fatalf("CreateCSR failed: %v", err)
+        }
+    }
 }
 
 func BenchmarkPublicKeyPEM(b *testing.B) {
 	tmpDir := b.TempDir()
-	keyPath := filepath.Join(tmpDir, "bench.key")
+    keyPath := filepath.Join(tmpDir, benchKeyName)
 
-	priv, err := GenerateSigningKey(keyPath)
-	if err != nil {
-		b.Fatalf("Failed to generate key: %v", err)
-	}
+    priv, err := GenerateSigningKey(keyPath)
+    if err != nil {
+        b.Fatalf(msgGenerateKeyFail, err)
+    }
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

@@ -130,14 +130,14 @@ func (m *SSMManager) SetSecret(ctx context.Context, key, value string) error {
 
 // buildParameterName constructs the full parameter name with prefix
 func (m *SSMManager) buildParameterName(key string) string {
-	if m.prefix == "" {
+	if m.prefix == emptyString {
 		return key
 	}
 
 	// Ensure prefix starts with / and ends with /
-	prefix := strings.TrimSuffix(strings.TrimPrefix(m.prefix, "/"), "/")
-	if prefix != "" {
-		return fmt.Sprintf("/%s/%s", prefix, strings.TrimPrefix(key, "/"))
+	prefix := strings.TrimSuffix(strings.TrimPrefix(m.prefix, slash), slash)
+	if prefix != emptyString {
+		return fmt.Sprintf("%s%s%s%s", slash, prefix, slash, strings.TrimPrefix(key, slash))
 	}
 
 	return key

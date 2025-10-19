@@ -21,6 +21,15 @@ import (
 	"github.com/EvalOps/keep/pkg/pki"
 )
 
+const (
+	defaultComponent      = "attestor-service"
+	statusHealthy         = "healthy"
+	slash                 = "/"
+	defaultHTTPTimeout    = 10 * time.Second
+	defaultSignalCapacity = 1
+	statusCodeThreshold   = 400
+)
+
 // Config holds the service configuration
 type Config struct {
 	DeviceID        string
@@ -74,7 +83,7 @@ func New(config *Config) *Service {
 	return &Service{
 		config:     config,
 		collector:  posture.GetCollector(),
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: newHTTPClient(),
 		ctx:        ctx,
 		cancel:     cancel,
 		logger:     logger,
@@ -139,7 +148,7 @@ func (s *Service) Stop() error {
 
 // setupSignalHandling configures signal handlers for graceful shutdown
 func (s *Service) setupSignalHandling() {
-	sigChan := make(chan os.Signal, 1)
+	sigChan := make(chan os.Signal, defaultSignalCapacity)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	go func() {
@@ -269,7 +278,7 @@ func (s *Service) updatePosture() error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= statusCodeThreshold {
 		return fmt.Errorf("posture update failed: %s", resp.Status)
 	}
 
@@ -294,7 +303,7 @@ func (s *Service) registerDevice(publicKey, posture string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= statusCodeThreshold {
 		return fmt.Errorf("inventory register failed: %s", resp.Status)
 	}
 
@@ -328,7 +337,7 @@ func (s *Service) obtainCertificate() error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= statusCodeThreshold {
 		return fmt.Errorf("cert request failed: %s", resp.Status)
 	}
 
@@ -347,10 +356,10 @@ func (s *Service) obtainCertificate() error {
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(s.config.CAPath), 0o700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(s.config.CAPath), permOwnerReadWriteExec); err != nil {
 			return err
 		}
-		if err := os.WriteFile(s.config.CAPath, rawCA, 0o600); err != nil {
+		if err := os.WriteFile(s.config.CAPath, rawCA, permOwnerReadWrite); err != nil {
 			return err
 		}
 	}
@@ -380,7 +389,7 @@ func (s *Service) httpClientOrDefault() *http.Client {
 	if s.httpClient != nil {
 		return s.httpClient
 	}
-	return &http.Client{Timeout: 10 * time.Second}
+	return newHTTPClient()
 }
 
 func (s *Service) postJSON(endpoint string, payload []byte) (*http.Response, error) {
@@ -407,7 +416,7 @@ func (s *Service) get(endpoint string) (*http.Response, error) {
 // writePIDFile writes the process ID to a file
 func (s *Service) writePIDFile() error {
 	pid := os.Getpid()
-	return os.WriteFile(s.config.PIDFile, []byte(fmt.Sprintf("%d\n", pid)), 0o600)
+	return os.WriteFile(s.config.PIDFile, []byte(fmt.Sprintf("%d\n", pid)), permOwnerReadWrite)
 }
 
 // removePIDFile removes the PID file
@@ -423,7 +432,7 @@ func (s *Service) daemonize() error {
 	// In production, you might want to use proper daemon libraries
 	// or systemd service files
 
-	if os.Getppid() == 1 {
+	if os.Getppid() == defaultSignalCapacity {
 		// Already daemonized
 		return nil
 	}

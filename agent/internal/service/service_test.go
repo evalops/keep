@@ -103,7 +103,7 @@ func TestService_initialRegistration(t *testing.T) {
 					t.Fatalf("Failed to encode response: %v", err)
 				}
 			} else {
-				http.Error(w, "not found", http.StatusNotFound)
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			}
 		}))
 		defer mockInventory.Close()
@@ -215,6 +215,7 @@ func TestService_initialRegistration(t *testing.T) {
 }
 
 // TestService_updatePosture tests posture updates
+
 func TestService_updatePosture(t *testing.T) {
 
 	t.Run("successful posture update", func(t *testing.T) {

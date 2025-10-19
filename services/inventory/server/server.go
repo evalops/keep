@@ -210,7 +210,7 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
 		log.Printf("failed to encode health response: %v", err)

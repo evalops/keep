@@ -15,9 +15,12 @@ const (
 	flagValueTrue      = "true"
 	defaultAppEnv      = "development"
 	defaultRequireMTLS = "false"
+	defaultShutdown    = 5 * time.Second
+	defaultServiceName = "inventory"
 )
 
 func main() {
+	var err error
 	// Initialize secret management
 	secretHelper := secrets.NewHelperFromEnv()
 	secretHelper.LogSecretSource()
@@ -39,17 +42,19 @@ func main() {
 		TLSKey:      secretHelper.GetOrDefault("INVENTORY_TLS_KEY", tlsConfig["INVENTORY_TLS_KEY"]),
 		ClientCA:    secretHelper.GetOrDefault("INVENTORY_CLIENT_CA", tlsConfig["INVENTORY_CLIENT_CA"]),
 		AuthzJWKS:   envOrDefault("AUTHZ_JWKS_URL", ""),
-		Shutdown:    5 * time.Second,
+		Shutdown:    defaultShutdown,
 		RequireMTLS: envOrDefault("INVENTORY_REQUIRE_MTLS", defaultRequireMTLS) == flagValueTrue,
 	}
 
 	ctx := context.Background()
-	if err := telemetry.Init(ctx, telemetry.Config{
+	telemetryCfg := telemetry.Config{
 		Endpoint:    os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		Insecure:    os.Getenv("OTEL_EXPORTER_OTLP_INSECURE") == flagValueTrue,
-		ServiceName: "inventory",
+		ServiceName: defaultServiceName,
 		Environment: envOrDefault("APP_ENV", defaultAppEnv),
-	}); err != nil {
+	}
+
+	if err = telemetry.Init(ctx, telemetryCfg); err != nil {
 		log.Printf("telemetry init failed: %v", err)
 	}
 

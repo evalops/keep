@@ -122,11 +122,11 @@ func (m *VaultManager) GetSecret(_ context.Context, key string) (string, error) 
 
 	secret, err := m.client.Logical().Read(secretPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read secret %s: %w", secretPath, err)
+		return emptyString, fmt.Errorf("failed to read secret %s: %w", secretPath, err)
 	}
 
 	if secret == nil || secret.Data == nil {
-		return "", fmt.Errorf("secret not found: %s", secretPath)
+		return emptyString, fmt.Errorf("secret not found: %s", secretPath)
 	}
 
 	// Handle KV v2 (data wrapper)
@@ -141,13 +141,13 @@ func (m *VaultManager) GetSecret(_ context.Context, key string) (string, error) 
 		// Try the key name itself
 		value, ok = data[filepath.Base(key)]
 		if !ok {
-			return "", fmt.Errorf("secret value not found in %s", secretPath)
+			return emptyString, fmt.Errorf("secret value not found in %s", secretPath)
 		}
 	}
 
 	valueStr, ok := value.(string)
 	if !ok {
-		return "", fmt.Errorf("secret value is not a string in %s", secretPath)
+		return emptyString, fmt.Errorf("secret value is not a string in %s", secretPath)
 	}
 
 	return valueStr, nil
