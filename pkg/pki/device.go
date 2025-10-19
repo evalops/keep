@@ -135,7 +135,7 @@ func WriteCertificate(path string, pemData []byte) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o750); err != nil {
 		return err
 	}
 

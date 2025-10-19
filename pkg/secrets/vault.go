@@ -218,7 +218,8 @@ func readSecretFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return os.ReadFile(sanitized)
+	// Path is sanitized above - G304 is false positive
+	return os.ReadFile(sanitized) // #nosec G304
 }
 
 func sanitizePath(path string) (string, error) {

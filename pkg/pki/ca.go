@@ -8,10 +8,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -24,6 +26,20 @@ const (
 	permOwnerReadGroup    = 0o640
 	maxSerialShift        = 128
 )
+
+// validatePath ensures the path is safe from directory traversal attacks
+func validatePath(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("path is empty")
+	}
+	
+	cleaned := filepath.Clean(path)
+	if strings.Contains(cleaned, "..") {
+		return fmt.Errorf("path contains directory traversal: %s", path)
+	}
+	
+	return nil
+}
 
 type CertificateAuthority struct {
 	cert     *x509.Certificate
@@ -99,11 +115,19 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 
 // LoadCA loads an existing CA from certificate and key files
 func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
-	certPEM, err := os.ReadFile(certPath)
+	if err := validatePath(certPath); err != nil {
+		return nil, fmt.Errorf("invalid cert path: %w", err)
+	}
+	if err := validatePath(keyPath); err != nil {
+		return nil, fmt.Errorf("invalid key path: %w", err)
+	}
+	
+	// Paths are validated above - G304 is false positive
+	certPEM, err := os.ReadFile(certPath) // #nosec G304
 	if err != nil {
 		return nil, err
 	}
-	keyPEM, err := os.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath) // #nosec G304
 	if err != nil {
 		return nil, err
 	}
@@ -135,11 +159,16 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 }
 
 func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error) error {
+	if err := validatePath(path); err != nil {
+		return fmt.Errorf("invalid file path: %w", err)
+	}
+	
 	if err := os.MkdirAll(filepath.Dir(path), permOwnerReadExecute); err != nil {
 		return err
 	}
 
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	// Path is validated above - G304 is false positive
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) // #nosec G304
 	if err != nil {
 		return err
 	}

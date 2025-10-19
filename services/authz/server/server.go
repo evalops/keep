@@ -267,7 +267,9 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}
 	if s.tsServer != nil {
-		s.tsServer.Close()
+		if err := s.tsServer.Close(); err != nil {
+			log.Printf("Warning: failed to close tailscale server: %v", err)
+		}
 	}
 	return shutdownErr
 }
@@ -819,7 +821,7 @@ func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 // loggingMiddleware provides structured logging for all requests
-func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
+func (*Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
@@ -849,7 +851,7 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 }
 
 // metricsMiddleware records Prometheus metrics for all requests
-func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
+func (*Server) metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 

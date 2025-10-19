@@ -435,7 +435,7 @@ func TestServer_lookupDevice(t *testing.T) {
 	})
 
 	t.Run("returns unregistered for 404 response", func(t *testing.T) {
-		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "not found", http.StatusNotFound)
 		}))
 		defer mockInventory.Close()
@@ -489,7 +489,7 @@ func TestServer_lookupDevice(t *testing.T) {
 	})
 
 	t.Run("handles inventory service errors", func(t *testing.T) {
-		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mockInventory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}))
 		defer mockInventory.Close()

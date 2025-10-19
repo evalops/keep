@@ -90,7 +90,7 @@ func (c *LinuxCollector) collectFirewallStatus(fw *FirewallStatus) error {
 }
 
 // checkUFW checks Ubuntu UFW firewall status
-func (c *LinuxCollector) checkUFW(fw *FirewallStatus) bool {
+func (*LinuxCollector) checkUFW(fw *FirewallStatus) bool {
 	output, err := runCommand("ufw", "status")
 	if err != nil {
 		return false

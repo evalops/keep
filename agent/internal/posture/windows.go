@@ -82,7 +82,7 @@ func (c *WindowsCollector) collectOSInfo(os *OperatingSystem) error {
 }
 
 // collectFirewallStatus checks Windows Defender Firewall status
-func (c *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
+func (*WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	fw.Service = "Windows Defender Firewall"
 
 	// Check firewall state using netsh
@@ -113,7 +113,7 @@ func (c *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 }
 
 // checkAntiVirus checks Windows Defender and other antivirus software
-func (c *WindowsCollector) checkAntiVirus() bool {
+func (*WindowsCollector) checkAntiVirus() bool {
 	// Check Windows Defender status
 	output, err := runCommand(powershellCmd, powershellFlag, "Get-MpComputerStatus | Select-Object AntivirusEnabled")
 	if err == nil && strings.Contains(strings.ToLower(output), "true") {

@@ -424,7 +424,9 @@ func (s *Service) writePIDFile() error {
 // removePIDFile removes the PID file
 func (s *Service) removePIDFile() {
 	if s.config.PIDFile != "" {
-		os.Remove(s.config.PIDFile)
+		if err := os.Remove(s.config.PIDFile); err != nil {
+			log.Printf("Warning: failed to remove PID file %s: %v", s.config.PIDFile, err)
+		}
 	}
 }
 
