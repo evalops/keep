@@ -53,10 +53,10 @@ type CertificateAuthority struct {
 // LoadOrCreateCA loads an existing CA or creates a new one if files don't exist
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
 	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadExecute); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create certificate directory: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(keyPath), permOwnerReadExecute); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create key directory: %w", err)
 	}
 
 	if _, err := os.Stat(certPath); err == nil {
@@ -69,13 +69,13 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate CA private key: %w", err)
 	}
 
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(bigIntOne), maxSerialShift)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate CA serial number: %w", err)
 	}
 
 	tpl := &x509.Certificate{
