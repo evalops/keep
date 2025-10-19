@@ -4,7 +4,7 @@ from typing import Any, Generator
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
 
 from app.main import app  # noqa: E402
-from app.tests.conftest import typed_fixture
+from app.tests.conftest import typed_fixture  # noqa: E402
 
 TestClient = Any
 
