@@ -436,12 +436,12 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 
 	buf, err := json.Marshal(body)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal OPA request body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OPAURL+"/v1/data/keep/allow", bytes.NewReader(buf))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create OPA HTTP request: %w", err)
 	}
 	req.Header.Set(contentTypeHeader, applicationJSON)
 
@@ -936,7 +936,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/mfa/verify", bytes.NewReader(body))
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to create MFA verification request: %w", err)
 	}
 	req.Header.Set(contentTypeHeader, applicationJSON)
 
@@ -956,7 +956,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	})
 	if retryErr != nil {
 		telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameMFA, "verify", time.Since(start), "error")
-		return false, retryErr
+		return false, fmt.Errorf("MFA verification request failed: %w", retryErr)
 	}
 	defer resp.Body.Close()
 
@@ -967,7 +967,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 
 	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to decode MFA verification response: %w", err)
 	}
 
 	status := statusOK

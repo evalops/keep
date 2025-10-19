@@ -62,10 +62,10 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 	db, err := sql.Open("pgx", cfg.DSN)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
 	if err := db.Ping(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Note: Schema migrations should be run separately using the migrate tool

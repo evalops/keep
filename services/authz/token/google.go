@@ -70,12 +70,12 @@ func VerifyGoogleJWT(ctx context.Context, rawToken, audience string) (map[string
 
 	parts, err := parseJWT(rawToken)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse JWT: %w", err)
 	}
 
 	header, err := decodeHeader(parts[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode JWT header: %w", err)
 	}
 
 	if header.Alg != algorithmRS256 {

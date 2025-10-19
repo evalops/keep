@@ -307,7 +307,7 @@ func generateMFACode() (string, error) {
 	max := big.NewInt(codeRange)
 	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate random MFA code: %w", err)
 	}
 
 	return fmt.Sprintf("%0*d", codeDigits, n.Int64()+codeMinValue), nil
