@@ -14,11 +14,13 @@ import (
 )
 
 const (
-	testDeviceID       = "test-device"
-	testAllowPath      = "/v1/data/keep/allow"
-	testClientRemoteIP = "100.65.1.1:12345"
-	resultKey          = "result"
-	decisionKey        = "decision"
+	testDeviceID           = "test-device"
+	testAllowPath          = "/v1/data/keep/allow"
+	testClientRemoteIP     = "100.65.1.1:12345"
+	resultKey              = "result"
+	decisionKey            = "decision"
+	testRejectsNonPOST     = testRejectsNonPOST
+	testRejectsInvalidJSON = testRejectsInvalidJSON
 )
 
 // TestServer_healthHandler tests the health endpoint
@@ -52,7 +54,7 @@ func TestServer_healthHandler(t *testing.T) {
 func TestServer_verifyHandler(t *testing.T) {
 	server := createTestServer(t)
 
-	t.Run("rejects non-POST methods", func(t *testing.T) {
+	t.Run(testRejectsNonPOST, func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify", nil)
 		rr := httptest.NewRecorder()
 
@@ -63,7 +65,7 @@ func TestServer_verifyHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects invalid JSON", func(t *testing.T) {
+	t.Run(testRejectsInvalidJSON, func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/verify", bytes.NewReader([]byte("invalid json")))
 		rr := httptest.NewRecorder()
 
@@ -187,7 +189,7 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 
 	server := createTestServerWithMocks(t, mockOPA.URL, mockInventory.URL)
 
-	t.Run("rejects non-POST methods", func(t *testing.T) {
+	t.Run(testRejectsNonPOST, func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/auth/check", nil)
 		rr := httptest.NewRecorder()
 
@@ -198,7 +200,7 @@ func TestServer_envoyAuthHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects invalid JSON", func(t *testing.T) {
+	t.Run(testRejectsInvalidJSON, func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/auth/check", bytes.NewReader([]byte("invalid json")))
 		rr := httptest.NewRecorder()
 
@@ -513,7 +515,7 @@ func TestServer_lookupDevice(t *testing.T) {
 func TestServer_deviceCertHandler(t *testing.T) {
 	server := createTestServer(t)
 
-	t.Run("rejects non-POST methods", func(t *testing.T) {
+	t.Run(testRejectsNonPOST, func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v1/certs/device", nil)
 		rr := httptest.NewRecorder()
 
@@ -524,7 +526,7 @@ func TestServer_deviceCertHandler(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects invalid JSON", func(t *testing.T) {
+	t.Run(testRejectsInvalidJSON, func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/certs/device", bytes.NewReader([]byte("invalid json")))
 		rr := httptest.NewRecorder()
 

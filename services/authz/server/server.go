@@ -42,6 +42,8 @@ const (
 	defaultRetryMultiplier   = 1.5
 	defaultMaxInterval       = 2 * time.Second
 	emptyString              = ""
+	contentTypeHeader        = "Content-Type"
+	applicationJSON          = "application/json"
 	errDecodeRequest         = "bad request"
 	errMissingMFAParams      = "missing MFA parameters"
 	errMethodNotAllowed      = "method not allowed"
@@ -155,7 +157,7 @@ func New(cfg Config) (*Server, error) {
 		})
 	})
 
-	useTLS := cfg.TLSCertPath != "" && cfg.TLSKeyPath != ""
+	useTLS := cfg.TLSCertPath != emptyString && cfg.TLSKeyPath != emptyString
 	if useTLS {
 		cert, err := tls.LoadX509KeyPair(cfg.TLSCertPath, cfg.TLSKeyPath)
 		if err != nil {
@@ -281,7 +283,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 		"tailscale": s.getTailscaleInfo(),
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(contentTypeHeader, applicationJSON)
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(health); err != nil {
 		log.Printf("failed to encode health response: %v", err)
@@ -394,7 +396,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusOK)
 	case decisionStepUp:
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(contentTypeHeader, applicationJSON)
 		w.WriteHeader(http.StatusForbidden)
 		response := map[string]interface{}{
 			"error":      "mfa_required",
@@ -432,7 +434,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(contentTypeHeader, applicationJSON)
 
 	start := time.Now()
 	var resp *http.Response
@@ -814,7 +816,7 @@ func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	status := s.getTailscaleInfo()
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(contentTypeHeader, applicationJSON)
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(status); err != nil {
 		log.Printf("failed to encode tailscale status: %v", err)
@@ -927,7 +929,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(contentTypeHeader, applicationJSON)
 
 	start := time.Now()
 	var resp *http.Response
