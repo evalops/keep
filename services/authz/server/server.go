@@ -49,6 +49,7 @@ const (
 	serviceNameOPA            = "opa"
 	serviceNameMFA            = "mfa"
 	serviceNameInventory      = "inventory"
+	minRetryAttempts          = 0
 	statusError               = "error"
 	statusInvalid             = "invalid"
 	zeroTrustScore            = 0
@@ -144,7 +145,7 @@ func New(cfg Config) (*Server, error) {
 		Multiplier:      defaultRetryMultiplier,
 		MaxInterval:     defaultMaxInterval,
 	}
-	if cfg.RetryMaxAttempts > 0 {
+	if cfg.RetryMaxAttempts > minRetryAttempts {
 		retryCfg.MaxAttempts = cfg.RetryMaxAttempts
 	}
 
