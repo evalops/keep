@@ -58,8 +58,8 @@ services:
 
   envoy:
     build:
-      context: .
-      dockerfile: envoy/Dockerfile
+      context: ./envoy
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     platform: linux/amd64

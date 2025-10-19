@@ -7,12 +7,11 @@ RUN go mod download
 COPY . .
 RUN go build -o mfa ./cmd/mfa
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-WORKDIR /root/
+FROM scratch
 
-COPY --from=builder /app/mfa .
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /app/mfa /mfa
 
 EXPOSE 8445
 
-CMD ["./mfa"]
+ENTRYPOINT ["/mfa"]
