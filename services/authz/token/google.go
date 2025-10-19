@@ -22,6 +22,16 @@ const (
 	bitShift        = 8
 	initialCapacity = 0
 	indexIncrement  = 1
+	
+	// Error messages
+	errAudienceMismatch = "audience mismatch"
+	errIssuerMismatch   = "issuer mismatch" 
+	errTokenExpired     = "token expired"
+	errInvalidIssuedTime = "invalid issued time"
+	errUnsupportedAlg   = "unsupported algorithm"
+	errInvalidJWTFormat = "invalid jwt format"
+	errKeyNotFound      = "key not found"
+	errAudienceRequired = "audience required"
 )
 
 type googleKey struct {
@@ -65,7 +75,7 @@ type jwtHeader struct {
 
 func VerifyGoogleJWT(ctx context.Context, rawToken, audience string) (map[string]any, error) {
 	if audience == "" {
-		return nil, errors.New("audience required")
+		return nil, errors.New(errAudienceRequired)
 	}
 
 	parts, err := parseJWT(rawToken)
@@ -79,7 +89,7 @@ func VerifyGoogleJWT(ctx context.Context, rawToken, audience string) (map[string
 	}
 
 	if header.Alg != algorithmRS256 {
-		return nil, errors.New("unsupported algorithm")
+		return nil, errors.New(errUnsupportedAlg)
 	}
 
 	claims, err := decodeClaims(parts[1])
@@ -101,7 +111,7 @@ func VerifyGoogleJWT(ctx context.Context, rawToken, audience string) (map[string
 func parseJWT(token string) ([]string, error) {
 	parts := splitToken(token)
 	if len(parts) != expectedTokenParts {
-		return nil, errors.New("invalid jwt format")
+		return nil, errors.New(errInvalidJWTFormat)
 	}
 	return parts, nil
 }
@@ -151,23 +161,23 @@ func verifySignature(ctx context.Context, kid string, parts []string) error {
 func validateClaims(claims map[string]any, audience string) error {
 	aud, ok := claims[claimAudience].(string)
 	if !ok || aud != audience {
-		return errors.New("audience mismatch")
+		return errors.New(errAudienceMismatch)
 	}
 
 	iss, ok := claims[claimIssuer].(string)
 	if !ok || iss != issuerGoogleAccounts {
-		return errors.New("issuer mismatch")
+		return errors.New(errIssuerMismatch)
 	}
 
 	now := time.Now().Unix()
 	exp, ok := claims[claimExpiry].(float64)
 	if !ok || int64(exp) < now {
-		return errors.New("token expired")
+		return errors.New(errTokenExpired)
 	}
 
 	iat, ok := claims[claimIssuedAt].(float64)
 	if !ok || int64(iat) > now+allowedClockSkew {
-		return errors.New("invalid issued time")
+		return errors.New(errInvalidIssuedTime)
 	}
 
 	return nil
@@ -223,7 +233,7 @@ func fetchGooglePublicKey(ctx context.Context, kid string) (*rsa.PublicKey, erro
 		return entry.publicKey, nil
 	}
 
-	return nil, errors.New("key not found")
+	return nil, errors.New(errKeyNotFound)
 }
 
 func buildRSAPublicKey(k googleKey) (*rsa.PublicKey, error) {
