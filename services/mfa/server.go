@@ -15,9 +15,28 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	defaultSessionTimeout = 5 * time.Minute
+	defaultCodeLength     = 6
+	defaultMaxAttempts    = 3
+	challengeTemplate     = "Enter the %d-digit code sent to your registered device"
+	headerContentType     = "Content-Type"
+	contentTypeJSON       = "application/json"
+	cleanupInterval       = time.Minute
+	codeDigits            = 6
+	codeMinValue          = 100000
+	codeRange             = 900000
+	mfaTokenPrefix        = "mfa-verified"
+	readHeaderTimeout     = 10 * time.Second
+	readTimeout           = 30 * time.Second
+	writeTimeout          = 30 * time.Second
+	idleTimeout           = 60 * time.Second
+	requestTimeout        = 30 * time.Second
+)
+
 // Server implements a basic MFA service for step-up authentication
 type Server struct {
-	sessions map[string]*MFASession
+	sessions map[string]*session
 	mu       sync.RWMutex
 	cfg      Config
 }
@@ -29,13 +48,13 @@ type Config struct {
 	CodeLength     int
 }
 
-// MFASession represents an active MFA challenge session
-type MFASession struct {
+// session represents an active MFA challenge session
+type session struct {
 	SessionID   string    `json:"session_id"`
 	DeviceID    string    `json:"device_id"`
 	UserEmail   string    `json:"user_email"`
 	Challenge   string    `json:"challenge"`
-	Code        string    `json:"-"` // Don't expose in JSON
+	Code        string    `json:"-"`
 	ExpiresAt   time.Time `json:"expires_at"`
 	Attempts    int       `json:"attempts"`
 	MaxAttempts int       `json:"max_attempts"`
@@ -57,14 +76,14 @@ type VerifyRequest struct {
 // New creates a new MFA server
 func New(cfg Config) *Server {
 	if cfg.SessionTimeout == 0 {
-		cfg.SessionTimeout = 5 * time.Minute
+		cfg.SessionTimeout = defaultSessionTimeout
 	}
 	if cfg.CodeLength == 0 {
-		cfg.CodeLength = 6
+		cfg.CodeLength = defaultCodeLength
 	}
 
 	return &Server{
-		sessions: make(map[string]*MFASession),
+		sessions: make(map[string]*session),
 		cfg:      cfg,
 	}
 }
@@ -76,7 +95,7 @@ func (s *Server) Start(ctx context.Context) error {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(middleware.Timeout(requestTimeout))
 
 	r.Get("/health", s.healthHandler)
 
@@ -92,10 +111,10 @@ func (s *Server) Start(ctx context.Context) error {
 	server := &http.Server{
 		Addr:              s.cfg.Addr,
 		Handler:           r,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	go func() {
@@ -124,15 +143,15 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create session
-	session := &MFASession{
+	session := &session{
 		SessionID:   req.SessionID,
 		DeviceID:    req.DeviceID,
 		UserEmail:   req.UserEmail,
-		Challenge:   "Enter the 6-digit code sent to your registered device",
+		Challenge:   fmt.Sprintf(challengeTemplate, codeDigits),
 		Code:        code,
 		ExpiresAt:   time.Now().Add(s.cfg.SessionTimeout),
 		Attempts:    0,
-		MaxAttempts: 3,
+		MaxAttempts: defaultMaxAttempts,
 	}
 
 	s.mu.Lock()
@@ -144,10 +163,10 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 		Str("session_id", req.SessionID).
 		Str("device_id", req.DeviceID).
 		Str("user_email", req.UserEmail).
-		Str("mfa_code", code). // Only for PoC - never log codes in production
+		Str("mfa_code", code).
 		Msg("MFA challenge created")
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	response := map[string]interface{}{
 		"session_id": session.SessionID,
 		"challenge":  session.Challenge,
@@ -214,7 +233,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		Str("user_email", session.UserEmail).
 		Msg("MFA verification successful")
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	response := map[string]interface{}{
 		"status":  "verified",
 		"message": "MFA verification successful",
@@ -243,7 +262,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, contentTypeJSON)
 	if err := json.NewEncoder(w).Encode(session); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA status response")
 	}
@@ -268,26 +287,23 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // generateMFACode generates a random numeric code
 func (s *Server) generateMFACode() (string, error) {
-	max := big.NewInt(1000000) // 6-digit max
-	min := big.NewInt(100000)  // 6-digit min
-
-	n, err := rand.Int(rand.Reader, max.Sub(max, min))
+	max := big.NewInt(codeRange)
+	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%06d", n.Add(n, min).Int64()), nil
+	return fmt.Sprintf("%0*d", codeDigits, n.Int64()+codeMinValue), nil
 }
 
 // generateMFAToken creates a short-lived verification token
-func (s *Server) generateMFAToken(session *MFASession) string {
-	// In production, this would be a proper JWT with expiration
-	return fmt.Sprintf("mfa-verified-%s-%d", session.SessionID, time.Now().Unix())
+func (s *Server) generateMFAToken(session *session) string {
+	return fmt.Sprintf("%s-%s-%d", mfaTokenPrefix, session.SessionID, time.Now().Unix())
 }
 
 // cleanupExpiredSessions removes expired sessions periodically
 func (s *Server) cleanupExpiredSessions(ctx context.Context) {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
