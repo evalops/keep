@@ -57,6 +57,13 @@ const (
 	errDecodeRequest         = "bad request"
 	errMissingMFAParams      = "missing MFA parameters"
 	errMethodNotAllowed      = "method not allowed"
+	errGoogleClientIDRequired = "Google client ID is required"
+	errRootCACertRequired    = "root CA certificate path is required (must be provisioned externally)"
+	errRootCAKeyRequired     = "root CA private key path is required (must be provisioned externally)"
+	errServerAlreadyStarted  = "server already started"
+	errInvalidPEM            = "invalid pem"
+	errMissingToken          = "missing token"
+	errInvalidTokenFormat    = "invalid token format"
 	
 	// Tailscale network constants
 	tailscaleIP1   = 100
@@ -96,15 +103,15 @@ func New(cfg Config) (*Server, error) {
 	}
 
 	if cfg.GoogleClientID == "" {
-		return nil, errors.New("Google client ID is required")
+		return nil, errors.New(errGoogleClientIDRequired)
 	}
 
 	// Load CA from externally provisioned certificates (never generate in service)
 	if cfg.RootCAPath == emptyString {
-		return nil, errors.New("root CA certificate path is required (must be provisioned externally)")
+		return nil, errors.New(errRootCACertRequired)
 	}
 	if cfg.TLSKeyPath == emptyString {
-		return nil, errors.New("root CA private key path is required (must be provisioned externally)")
+		return nil, errors.New(errRootCAKeyRequired)
 	}
 
 	ca, err := pki.LoadCA(cfg.RootCAPath, cfg.TLSKeyPath)
@@ -251,7 +258,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.mu.Lock()
 	if s.started {
 		s.mu.Unlock()
-		return errors.New("server already started")
+		return errors.New(errServerAlreadyStarted)
 	}
 	s.started = true
 	s.mu.Unlock()
@@ -671,7 +678,7 @@ func (s *Server) caHandler(w http.ResponseWriter, r *http.Request) {
 func decodePEMBlock(p string) ([]byte, error) {
 	block, _ := pem.Decode([]byte(p))
 	if block == nil {
-		return nil, errors.New("invalid pem")
+		return nil, errors.New(errInvalidPEM)
 	}
 	return block.Bytes, nil
 }
@@ -986,12 +993,12 @@ func extractClientIP(headers map[string]string) string {
 // validateBearerToken validates and parses a Bearer token from the Authorization header
 func (s *Server) validateBearerToken(ctx context.Context, authHeader string) (map[string]interface{}, error) {
 	if authHeader == "" {
-		return nil, errors.New("missing token")
+		return nil, errors.New(errMissingToken)
 	}
 
 	const prefix = "Bearer "
 	if !strings.HasPrefix(authHeader, prefix) {
-		return nil, errors.New("invalid token format")
+		return nil, errors.New(errInvalidTokenFormat)
 	}
 
 	tok := strings.TrimSpace(strings.TrimPrefix(authHeader, prefix))
