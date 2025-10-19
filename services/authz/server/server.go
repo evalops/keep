@@ -72,6 +72,11 @@ const (
 	tailscaleIP4   = 0
 	tailscaleCIDR  = 10
 	ipv4Bits       = 32
+	
+	// HTTP status code constants
+	httpServerError     = 500
+	httpNotFound        = 404
+	tailscaleDefaultPort = ":8444"
 )
 
 // Server implements the authorization service with OPA policy evaluation
@@ -451,7 +456,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 		if err != nil {
 			return err
 		}
-		if r.StatusCode >= 500 {
+		if r.StatusCode >= httpServerError {
 			_ = r.Body.Close()
 			return fmt.Errorf("opa temporary error: %d", r.StatusCode)
 		}
@@ -560,7 +565,7 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 		if err != nil {
 			return err
 		}
-		if r.StatusCode >= 500 {
+		if r.StatusCode >= httpServerError {
 			_ = r.Body.Close()
 			return fmt.Errorf("inventory temporary error: %d", r.StatusCode)
 		}
@@ -752,7 +757,7 @@ func setupTailscale(cfg Config) (*tsnet.Server, net.Listener, error) {
 	}
 
 	if cfg.TailscaleListenAddr == "" {
-		listener, err = tsServer.Listen("tcp", ":8444") // Default port for Tailscale
+		listener, err = tsServer.Listen("tcp", tailscaleDefaultPort) // Default port for Tailscale
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create Tailscale listener on default port: %w", err)
 		}
@@ -946,7 +951,7 @@ func (s *Server) verifyMFACode(ctx context.Context, sessionID, code string) (boo
 		if err != nil {
 			return err
 		}
-		if r.StatusCode >= 500 {
+		if r.StatusCode >= httpServerError {
 			_ = r.Body.Close()
 			return fmt.Errorf("mfa temporary error: %d", r.StatusCode)
 		}

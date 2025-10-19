@@ -23,14 +23,18 @@ const (
 
 // GenerateSigningKey creates a new P256 ECDSA key and writes it to the provided path in PEM (PKCS8) format.
 func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
+	if err := validatePath(path); err != nil {
+		return nil, fmt.Errorf("invalid key path: %w", err)
+	}
+	
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate signing key: %w", err)
 	}
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(absPath), dirPermissions); err != nil {
@@ -63,9 +67,13 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 
 // LoadSigningKey reads an ECDSA private key from disk (PKCS8 PEM).
 func LoadSigningKey(path string) (*ecdsa.PrivateKey, error) {
+	if err := validatePath(path); err != nil {
+		return nil, fmt.Errorf("invalid key path: %w", err)
+	}
+	
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	root, fileName, err := openFileRoot(absPath)
@@ -132,9 +140,13 @@ func CreateCSR(priv *ecdsa.PrivateKey, deviceID string) ([]byte, error) {
 
 // WriteCertificate writes PEM certificate data to disk with secure permissions.
 func WriteCertificate(path string, pemData []byte) error {
+	if err := validatePath(path); err != nil {
+		return fmt.Errorf("invalid certificate path: %w", err)
+	}
+	
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(absPath), dirPermissionsSecure); err != nil {

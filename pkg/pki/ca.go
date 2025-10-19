@@ -52,6 +52,13 @@ type CertificateAuthority struct {
 
 // LoadOrCreateCA loads an existing CA or creates a new one if files don't exist
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
+	if err := validatePath(certPath); err != nil {
+		return nil, fmt.Errorf("invalid certificate path: %w", err)
+	}
+	if err := validatePath(keyPath); err != nil {
+		return nil, fmt.Errorf("invalid key path: %w", err)
+	}
+	
 	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadExecute); err != nil {
 		return nil, fmt.Errorf("failed to create certificate directory: %w", err)
 	}
