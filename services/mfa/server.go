@@ -75,10 +75,10 @@ type VerifyRequest struct {
 
 // New creates a new MFA server
 func New(cfg Config) *Server {
-	if cfg.SessionTimeout == 0 {
+	if cfg.SessionTimeout <= 0 {
 		cfg.SessionTimeout = defaultSessionTimeout
 	}
-	if cfg.CodeLength == 0 {
+	if cfg.CodeLength <= 0 {
 		cfg.CodeLength = defaultCodeLength
 	}
 

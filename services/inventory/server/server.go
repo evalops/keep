@@ -32,6 +32,9 @@ const (
 	statusOKValue     = "ok"
 	statusUpdated     = "updated"
 	dbErrorMsg        = "db error"
+	deviceIDRequired  = "device id required"
+	badRequestMsg     = "bad request"
+	emptyString       = ""
 	headerContentType = "Content-Type"
 	contentTypeJSON   = "application/json"
 )
@@ -92,7 +95,7 @@ func NewServer(cfg Config) (*Server, error) {
 		r.Route("/devices", func(r chi.Router) {
 			r.Get("/", s.listDevices)
 			r.Post("/", s.registerDevice)
-			r.Get("/{deviceID}", s.getDevice)
+			r.Get("/{deviceID}", s.getDeviceHandler)
 			r.Put("/{deviceID}", s.updateDevice)
 			r.Post("/{deviceID}/posture", s.updateDevicePosture)
 		})
@@ -206,7 +209,7 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
 		log.Printf("failed to encode health response: %v", err)
@@ -216,8 +219,8 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // updateDevicePosture handles posture update requests
 func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 	deviceID := chi.URLParam(r, deviceIDParam)
-	if deviceID == "" {
-		http.Error(w, "device id required", http.StatusBadRequest)
+	if deviceID == emptyString {
+		http.Error(w, deviceIDRequired, http.StatusBadRequest)
 		return
 	}
 
@@ -225,13 +228,13 @@ func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 		Posture string `json:"posture"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, badRequestMsg, http.StatusBadRequest)
 		return
 	}
 
 	_, err := s.db.Exec(`UPDATE devices SET posture=$1, last_updated=now() WHERE id=$2`, payload.Posture, deviceID)
 	if err != nil {
-		http.Error(w, "db error", http.StatusInternalServerError)
+		http.Error(w, dbErrorMsg, http.StatusInternalServerError)
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusUpdated}); err != nil {
@@ -261,10 +264,10 @@ func ensureSchema(db *sql.DB) error {
 	return err
 }
 
-func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
+func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {
 	rows, err := s.db.Query(`SELECT id, public_key, posture, registered_at, last_updated FROM devices`)
 	if err != nil {
-		http.Error(w, "db error", http.StatusInternalServerError)
+		http.Error(w, dbErrorMsg, http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -273,7 +276,7 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var d Device
 		if err := rows.Scan(&d.ID, &d.PublicKey, &d.Posture, &d.Registered, &d.LastUpdated); err != nil {
-			http.Error(w, "db error", http.StatusInternalServerError)
+			http.Error(w, dbErrorMsg, http.StatusInternalServerError)
 			return
 		}
 		list = append(list, d)
@@ -287,17 +290,17 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 	var d Device
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, badRequestMsg, http.StatusBadRequest)
 		return
 	}
-	if d.ID == "" {
+	if d.ID == emptyString {
 		http.Error(w, "id required", http.StatusBadRequest)
 		return
 	}
 
 	_, err := s.db.Exec(`INSERT INTO devices (id, public_key, posture) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET public_key = EXCLUDED.public_key, posture = EXCLUDED.posture, last_updated = now()`, d.ID, d.PublicKey, d.Posture)
 	if err != nil {
-		http.Error(w, "db error", http.StatusInternalServerError)
+		http.Error(w, dbErrorMsg, http.StatusInternalServerError)
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
@@ -305,7 +308,7 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getDeviceHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, deviceIDParam)
 	var d Device
 	if err := s.db.QueryRow(`SELECT id, public_key, posture, registered_at, last_updated FROM devices WHERE id=$1`, id).Scan(&d.ID, &d.PublicKey, &d.Posture, &d.Registered, &d.LastUpdated); err != nil {
@@ -313,7 +316,7 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "db error", http.StatusInternalServerError)
+		http.Error(w, dbErrorMsg, http.StatusInternalServerError)
 		return
 	}
 	if err := json.NewEncoder(w).Encode(d); err != nil {
@@ -327,13 +330,13 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 		Posture string `json:"posture"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, badRequestMsg, http.StatusBadRequest)
 		return
 	}
 
 	_, err := s.db.Exec(`UPDATE devices SET posture=$1, last_updated=now() WHERE id=$2`, payload.Posture, id)
 	if err != nil {
-		http.Error(w, "db error", http.StatusInternalServerError)
+		http.Error(w, dbErrorMsg, http.StatusInternalServerError)
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusUpdated}); err != nil {
