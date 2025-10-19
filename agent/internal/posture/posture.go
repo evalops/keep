@@ -32,7 +32,7 @@ func (ts TrustStatus) String() string {
 	case TrustStatusCritical:
 		return StatusCritical
 	default:
-		return StatusCritical
+		return StatusUnknown
 	}
 }
 

@@ -3,11 +3,11 @@ VENV ?= .venv
 VENV_BIN := $(VENV)/bin
 PYTHON_BIN := python3
 PIP_BIN := pip
-FLAKE8_CMD := $(PYTHON_BIN) -m flake8
-MYPY_CMD := $(PYTHON_BIN) -m mypy
-BLACK_CMD := $(PYTHON_BIN) -m black
-ISORT_CMD := $(PYTHON_BIN) -m isort
-PYTEST_CMD := $(PYTHON_BIN) -m pytest
+FLAKE8_CMD = $(PYTHON_BIN) -m flake8
+MYPY_CMD = $(PYTHON_BIN) -m mypy
+BLACK_CMD = $(PYTHON_BIN) -m black
+ISORT_CMD = $(PYTHON_BIN) -m isort
+PYTEST_CMD = $(PYTHON_BIN) -m pytest
 GOLANGCI_LINT ?= golangci-lint
 
 ifneq ($(wildcard $(VENV_BIN)/python3),)

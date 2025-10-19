@@ -135,6 +135,32 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 	}
 }
 
+func TestTrustStatusUnknownStringAndJSON(t *testing.T) {
+	var ts TrustStatus
+	if ts != TrustStatusUnknown {
+		t.Fatalf("zero value should be TrustStatusUnknown, got %v", ts)
+	}
+	if ts.String() != StatusUnknown {
+		t.Fatalf("expected String() to return %q, got %q", StatusUnknown, ts.String())
+	}
+
+	data, err := ts.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON returned error: %v", err)
+	}
+	if string(data) != `"`+StatusUnknown+`"` {
+		t.Fatalf("expected marshaled JSON %q, got %s", StatusUnknown, data)
+	}
+
+	var decoded TrustStatus
+	if err := decoded.UnmarshalJSON(data); err != nil {
+		t.Fatalf("UnmarshalJSON returned error: %v", err)
+	}
+	if decoded != TrustStatusUnknown {
+		t.Fatalf("expected decoded status to be TrustStatusUnknown, got %v", decoded)
+	}
+}
+
 // TestDevicePosture_ToJSON tests JSON serialization
 func TestDevicePosture_ToJSON(t *testing.T) {
 	posture := &DevicePosture{

@@ -26,6 +26,7 @@ const (
 	StatusCompliant = "compliant"
 	StatusWarning   = "warning"
 	StatusCritical  = "critical"
+	StatusUnknown   = "unknown"
 
 	TrustBonusOS         = 20
 	TrustBonusFirewall   = 25
