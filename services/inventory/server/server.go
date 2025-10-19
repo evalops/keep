@@ -306,7 +306,7 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "deviceID")
+	id := chi.URLParam(r, deviceIDParam)
 	var d Device
 	if err := s.db.QueryRow(`SELECT id, public_key, posture, registered_at, last_updated FROM devices WHERE id=$1`, id).Scan(&d.ID, &d.PublicKey, &d.Posture, &d.Registered, &d.LastUpdated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -322,7 +322,7 @@ func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "deviceID")
+	id := chi.URLParam(r, deviceIDParam)
 	var payload struct {
 		Posture string `json:"posture"`
 	}
@@ -336,7 +336,7 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusUpdated}); err != nil {
 		log.Printf("failed to encode update device response: %v", err)
 	}
 }
