@@ -5,6 +5,38 @@ import (
 	"strings"
 )
 
+const (
+	// OS constants
+	linuxOSName = "Linux"
+	
+	// Service names
+	ufwService      = "ufw"
+	iptablesService = "iptables"
+	
+	// Command keywords
+	ufwStatusActive = "status: active"
+	cryptoLUKS      = "crypto_luks"
+	cryptKeyword    = "crypt"
+	trueKeyword     = "true"
+	
+	// Firewall rule keywords
+	allowKeyword  = "ALLOW"
+	denyKeyword   = "DENY"
+	acceptKeyword = "ACCEPT"
+	dropKeyword   = "DROP"
+	rejectKeyword = "REJECT"
+	
+	// Table headers to ignore
+	chainPrefix  = "Chain"
+	targetPrefix = "target"
+	numPrefix    = "num"
+)
+
+var (
+	// Common Linux antivirus software
+	linuxAntivirusSoftware = []string{"clamav", "sophos", "avast", "bitdefender", "eset"}
+)
+
 // LinuxCollector collects device posture on Linux systems
 type LinuxCollector struct{}
 
@@ -12,7 +44,7 @@ type LinuxCollector struct{}
 func (c *LinuxCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
 		OS: OperatingSystem{
-			Name: "Linux",
+			Name: linuxOSName,
 			Arch: runtime.GOARCH,
 		},
 	}
@@ -96,8 +128,8 @@ func checkUFW(fw *FirewallStatus) bool {
 		return false
 	}
 
-	fw.Service = "ufw"
-	fw.Enabled = strings.Contains(strings.ToLower(output), "status: active")
+	fw.Service = ufwService
+	fw.Enabled = strings.Contains(strings.ToLower(output), ufwStatusActive)
 
 	// Count rules (simplified)
 	lines := strings.Split(output, "\n")
@@ -106,7 +138,7 @@ func checkUFW(fw *FirewallStatus) bool {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "Status:") &&
 			!strings.HasPrefix(line, "To") && !strings.HasPrefix(line, "--") {
-			if strings.Contains(line, "ALLOW") || strings.Contains(line, "DENY") {
+			if strings.Contains(line, allowKeyword) || strings.Contains(line, denyKeyword) {
 				ruleCount++
 			}
 		}
@@ -125,16 +157,16 @@ func (c *LinuxCollector) checkIptables(fw *FirewallStatus) error {
 		return err
 	}
 
-	fw.Service = "iptables"
+	fw.Service = iptablesService
 	// If iptables returns without error and has rules, consider it enabled
 	lines := strings.Split(output, "\n")
 	ruleCount := 0
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "Chain") &&
-			!strings.HasPrefix(line, "target") && !strings.HasPrefix(line, "num") {
-			if strings.Contains(line, "ACCEPT") || strings.Contains(line, "DROP") ||
-				strings.Contains(line, "REJECT") {
+		if line != "" && !strings.HasPrefix(line, chainPrefix) &&
+			!strings.HasPrefix(line, targetPrefix) && !strings.HasPrefix(line, numPrefix) {
+			if strings.Contains(line, acceptKeyword) || strings.Contains(line, dropKeyword) ||
+				strings.Contains(line, rejectKeyword) {
 				ruleCount++
 			}
 		}
@@ -149,7 +181,7 @@ func (c *LinuxCollector) checkIptables(fw *FirewallStatus) error {
 // checkAntiVirus checks for antivirus software
 func (c *LinuxCollector) checkAntiVirus() bool {
 	// Check for common Linux antivirus solutions
-	antivirusSoftware := []string{"clamav", "sophos", "avast", "bitdefender", "eset"}
+	antivirusSoftware := linuxAntivirusSoftware
 
 	for _, av := range antivirusSoftware {
 		if _, err := runCommand("which", av); err == nil {
@@ -193,15 +225,16 @@ func (c *LinuxCollector) checkDiskEncryption() bool {
 		return false
 	}
 
-	return strings.Contains(strings.ToLower(output), "crypto_luks") ||
-		strings.Contains(strings.ToLower(output), "crypt")
+	lowerOutput := strings.ToLower(output)
+	return strings.Contains(lowerOutput, cryptoLUKS) ||
+		strings.Contains(lowerOutput, cryptKeyword)
 }
 
 // checkScreenLock checks if screen lock is configured
 func (c *LinuxCollector) checkScreenLock() bool {
 	// Check GNOME settings
 	if output, err := runCommand("gsettings", "get", "org.gnome.desktop.screensaver", "lock-enabled"); err == nil {
-		return strings.Contains(strings.ToLower(output), "true")
+		return strings.Contains(strings.ToLower(output), trueKeyword)
 	}
 
 	// Check KDE settings

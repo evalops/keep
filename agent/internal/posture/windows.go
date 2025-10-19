@@ -162,8 +162,9 @@ func (_ *WindowsCollector) checkDiskEncryption() bool {
 		return false
 	}
 
-	return strings.Contains(strings.ToLower(output), "protection on") ||
-		strings.Contains(strings.ToLower(output), "fully encrypted")
+	lowerOutput := strings.ToLower(output)
+	return strings.Contains(lowerOutput, "protection on") ||
+		strings.Contains(lowerOutput, "fully encrypted")
 }
 
 // checkScreenLock checks screen lock/password policy
