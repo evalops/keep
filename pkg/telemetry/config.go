@@ -2,6 +2,12 @@ package telemetry
 
 import "time"
 
+const (
+	defaultServiceName     = "keep-service"
+	defaultEnvironment     = "development"
+	defaultShutdownTimeout = 5 * time.Second
+)
+
 // Config controls OpenTelemetry initialization.
 type Config struct {
 	Endpoint        string
@@ -14,12 +20,12 @@ type Config struct {
 // defaults applies sane defaults to the configuration.
 func (c *Config) defaults() {
 	if c.ServiceName == "" {
-		c.ServiceName = "keep-service"
+		c.ServiceName = defaultServiceName
 	}
 	if c.Environment == "" {
-		c.Environment = "development"
+		c.Environment = defaultEnvironment
 	}
 	if c.ShutdownTimeout == 0 {
-		c.ShutdownTimeout = 5 * time.Second
+		c.ShutdownTimeout = defaultShutdownTimeout
 	}
 }

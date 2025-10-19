@@ -136,7 +136,7 @@ func (s *Server) challengeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate MFA code
-	code, err := s.generateMFACode()
+	code, err := generateMFACode()
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -237,7 +237,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"status":  "verified",
 		"message": "MFA verification successful",
-		"token":   s.generateMFAToken(session), // Short-lived MFA verification token
+		"token":   generateMFAToken(session), // Short-lived MFA verification token
 	}
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Error().Err(err).Msg("failed to encode MFA verify response")
@@ -286,7 +286,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // generateMFACode generates a random numeric code
-func (s *Server) generateMFACode() (string, error) {
+func generateMFACode() (string, error) {
 	max := big.NewInt(codeRange)
 	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *Server) generateMFACode() (string, error) {
 }
 
 // generateMFAToken creates a short-lived verification token
-func (s *Server) generateMFAToken(session *session) string {
+func generateMFAToken(session *session) string {
 	return fmt.Sprintf("%s-%s-%d", mfaTokenPrefix, session.SessionID, time.Now().Unix())
 }
 

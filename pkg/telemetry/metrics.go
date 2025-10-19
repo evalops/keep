@@ -8,6 +8,6 @@ import (
 )
 
 // RecordDependencyRequest captures metrics for external calls.
-func RecordDependencyRequest(ctx context.Context, service, dependency, operation string, duration time.Duration, status string) {
+func RecordDependencyRequest(_ context.Context, service, dependency, operation string, duration time.Duration, status string) {
 	metrics.RecordHTTPRequest(service+"-dep", operation, dependency, status, duration)
 }

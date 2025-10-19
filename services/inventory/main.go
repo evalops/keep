@@ -9,14 +9,23 @@ import (
 	"github.com/EvalOps/keep/services/inventory/server"
 )
 
+const (
+	defaultBindAddr    = ":8080"
+	defaultDSN         = "postgres://postgres:postgres@postgres:5432/keep?sslmode=disable"
+	defaultTLSCert     = ""
+	defaultTLSKey      = ""
+	defaultAuthzJWKS   = ""
+	defaultShutdownDur = 5 * time.Second
+)
+
 func main() {
 	cfg := server.Config{
-		Addr:      envDefault("INVENTORY_ADDR", ":8080"),
-		DSN:       envDefault("INVENTORY_DSN", "postgres://postgres:postgres@postgres:5432/keep?sslmode=disable"),
-		TLSCert:   envDefault("INVENTORY_TLS_CERT", ""),
-		TLSKey:    envDefault("INVENTORY_TLS_KEY", ""),
-		AuthzJWKS: envDefault("AUTHZ_JWKS_URL", ""),
-		Shutdown:  5 * time.Second,
+		Addr:      envDefault("INVENTORY_ADDR", defaultBindAddr),
+		DSN:       envDefault("INVENTORY_DSN", defaultDSN),
+		TLSCert:   envDefault("INVENTORY_TLS_CERT", defaultTLSCert),
+		TLSKey:    envDefault("INVENTORY_TLS_KEY", defaultTLSKey),
+		AuthzJWKS: envDefault("AUTHZ_JWKS_URL", defaultAuthzJWKS),
+		Shutdown:  defaultShutdownDur,
 	}
 
 	srv, err := server.NewServer(cfg)
