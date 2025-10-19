@@ -39,4 +39,8 @@ const (
 	TrustThresholdWarning   = 40
 	DefaultRules            = 0
 	RuleNamePrefix          = "Rule Name:"
+	MinWindowsVersion       = 10
+	MinMacOSVersion         = 12
+	MinFirewallRules        = 3
+	initialCapacity         = 0
 )

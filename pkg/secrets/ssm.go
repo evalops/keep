@@ -10,6 +10,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ssm"
 )
 
+const (
+	initialCapacity = 0
+)
+
 // SSMManager implements secret management using AWS Systems Manager Parameter Store
 type SSMManager struct {
 	client *ssm.Client
@@ -60,7 +64,7 @@ func (m *SSMManager) GetSecret(ctx context.Context, key string) (string, error) 
 
 // GetSecrets retrieves multiple secrets from AWS SSM Parameter Store
 func (m *SSMManager) GetSecrets(ctx context.Context, keys []string) (map[string]string, error) {
-	if len(keys) == 0 {
+	if len(keys) == initialCapacity {
 		return make(map[string]string), nil
 	}
 

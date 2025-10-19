@@ -12,6 +12,7 @@ import (
 
 // VaultManager implements secret management using HashiCorp Vault
 const (
+	emptyString        = ""
 	valueKey           = "value"
 	dataKey            = "data"
 	vaultAddrKey       = "VAULT_ADDR"
@@ -230,7 +231,7 @@ func sanitizePath(path string) (string, error) {
 
 	cleaned := filepath.Clean(trimmed)
 	if !filepath.IsAbs(cleaned) {
-		return "", fmt.Errorf("path must be absolute: %s", path)
+		return emptyString, fmt.Errorf("path must be absolute: %s", path)
 	}
 
 	if strings.Contains(cleaned, "..") {

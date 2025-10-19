@@ -431,7 +431,7 @@ func (s *Service) removePIDFile() {
 }
 
 // daemonize runs the process in background (Unix-like systems)
-func (s *Service) daemonize() error {
+func (*Service) daemonize() error {
 	// This is a simplified daemonization
 	// In production, you might want to use proper daemon libraries
 	// or systemd service files

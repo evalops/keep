@@ -136,7 +136,7 @@ func (*WindowsCollector) checkAntiVirus() bool {
 }
 
 // checkSystemUpdated checks Windows Update status
-func (c *WindowsCollector) checkSystemUpdated() bool {
+func (*WindowsCollector) checkSystemUpdated() bool {
 	// Check for pending updates using PowerShell
 	output, err := runCommand(powershellCmd, powershellFlag,
 		"Get-WUList -MicrosoftUpdate | Measure-Object | Select-Object -ExpandProperty Count")
@@ -155,7 +155,7 @@ func (c *WindowsCollector) checkSystemUpdated() bool {
 }
 
 // checkDiskEncryption checks BitLocker status
-func (c *WindowsCollector) checkDiskEncryption() bool {
+func (*WindowsCollector) checkDiskEncryption() bool {
 	// Check BitLocker status
 	output, err := runCommand("manage-bde", "-status")
 	if err != nil {
@@ -167,7 +167,7 @@ func (c *WindowsCollector) checkDiskEncryption() bool {
 }
 
 // checkScreenLock checks screen lock/password policy
-func (c *WindowsCollector) checkScreenLock() bool {
+func (*WindowsCollector) checkScreenLock() bool {
 	// Check screen saver settings
 	output, err := runCommand("reg", "query",
 		"HKEY_CURRENT_USER\\Software\\Policies\\Microsoft\\Windows\\Control Panel\\Desktop",
@@ -215,5 +215,5 @@ func (c *WindowsCollector) isOSSupported(version string) bool {
 	majorVersion := parseInt(parts[0])
 
 	// Support Windows 10 and later
-	return majorVersion >= 10
+	return majorVersion >= MinWindowsVersion
 }

@@ -144,7 +144,7 @@ func parseKeyValue(text string) map[string]string {
 			continue
 		}
 
-		parts := strings.SplitN(line, "=", 2)
+		parts := strings.SplitN(line, "=", keyValueParts)
 		if len(parts) == keyValueParts {
 			key := strings.TrimSpace(parts[0])
 			value := strings.Trim(strings.TrimSpace(parts[1]), "\"")

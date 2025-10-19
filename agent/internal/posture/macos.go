@@ -53,7 +53,7 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 		line = strings.TrimSpace(line)
 
 		if strings.HasPrefix(line, macOSVersionKey) {
-			parts := strings.SplitN(line, colonSeparator, 2)
+			parts := strings.SplitN(line, colonSeparator, keyValueParts)
 			if len(parts) == 2 {
 				versionInfo := strings.TrimSpace(parts[1])
 				// Parse "macOS Monterey 12.6.1 (21G217)"
@@ -76,7 +76,7 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 				}
 			}
 		} else if strings.HasPrefix(line, macOSKernelKey) {
-			parts := strings.SplitN(line, colonSeparator, 2)
+			parts := strings.SplitN(line, colonSeparator, keyValueParts)
 			if len(parts) == 2 {
 				os.Kernel = strings.TrimSpace(parts[1])
 			}
@@ -209,5 +209,5 @@ func (c *MacOSCollector) isOSSupported(version string) bool {
 
 	// Support last 3 major versions (as of 2024: macOS 12+)
 	// This should be updated periodically
-	return majorVersion >= 12
+	return majorVersion >= MinMacOSVersion
 }

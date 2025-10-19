@@ -141,7 +141,7 @@ func (c *LinuxCollector) checkIptables(fw *FirewallStatus) error {
 	}
 
 	fw.Rules = ruleCount
-	fw.Enabled = ruleCount > 3 // More than default rules
+	fw.Enabled = ruleCount > MinFirewallRules // More than default rules
 
 	return nil
 }

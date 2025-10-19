@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	emptyString = ""
+	emptyString     = ""
+	initialCapacity = 0
 )
 
 // Helper provides convenient methods for secret management integration
@@ -74,7 +75,7 @@ func (h *Helper) GetRequired(key string) (string, error) {
 
 // GetMultipleOrDefaults gets multiple secrets with fallback defaults
 func (h *Helper) GetMultipleOrDefaults(keyDefaults map[string]string) map[string]string {
-	keys := make([]string, 0, len(keyDefaults))
+	keys := make([]string, initialCapacity, len(keyDefaults))
 	for key := range keyDefaults {
 		keys = append(keys, key)
 	}
