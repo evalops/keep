@@ -12,6 +12,10 @@ import (
 	"github.com/EvalOps/keep/services/authz/server"
 )
 
+const (
+	emptyString = ""
+)
+
 func main() {
 	// Initialize secret management
 	secretHelper := secrets.NewHelperFromEnv()
@@ -73,7 +77,7 @@ func main() {
 }
 
 func getenv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+	if v := os.Getenv(key); v != emptyString {
 		return v
 	}
 	return def
