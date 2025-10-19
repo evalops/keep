@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	defaultKeyPerm  = 0o600
-	defaultCertPerm = 0o600
+	defaultKeyPerm       = 0o600
+	defaultCertPerm      = 0o600
+	dirPermissions       = 0o700
+	dirPermissionsSecure = 0o750
 )
 
 // GenerateSigningKey creates a new P256 ECDSA key and writes it to the provided path in PEM (PKCS8) format.
@@ -31,7 +33,7 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 		return nil, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absPath), dirPermissions); err != nil {
 		return nil, err
 	}
 
@@ -135,7 +137,7 @@ func WriteCertificate(path string, pemData []byte) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(absPath), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(absPath), dirPermissionsSecure); err != nil {
 		return err
 	}
 

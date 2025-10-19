@@ -3,10 +3,10 @@ FROM golang:1.24-alpine AS builder
 # Updated to fix Go version compatibility - requires Go 1.24+
 WORKDIR /app
 COPY go.mod go.sum ./
-RUN go mod download
+RUN GOTOOLCHAIN=auto go mod download
 
 COPY . .
-RUN go build -o mfa ./cmd/mfa
+RUN GOTOOLCHAIN=auto go build -o mfa ./cmd/mfa
 
 FROM scratch
 
