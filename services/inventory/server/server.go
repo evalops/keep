@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -18,6 +18,22 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/EvalOps/keep/pkg/telemetry"
+)
+
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 30 * time.Second
+	writeTimeout      = 30 * time.Second
+	idleTimeout       = 60 * time.Second
+	middlewareTimeout = 30 * time.Second
+
+	deviceIDParam     = "deviceID"
+	statusKey         = "status"
+	statusOKValue     = "ok"
+	statusUpdated     = "updated"
+	dbErrorMsg        = "db error"
+	headerContentType = "Content-Type"
+	contentTypeJSON   = "application/json"
 )
 
 type Config struct {
@@ -62,7 +78,7 @@ func NewServer(cfg Config) (*Server, error) {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(middleware.Timeout(middlewareTimeout))
 
 	// Health endpoint (no auth required)
 	r.Get("/health", s.health)
@@ -85,10 +101,10 @@ func NewServer(cfg Config) (*Server, error) {
 	s.http = &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           r,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 	return s, nil
 }
@@ -142,7 +158,7 @@ func (s *Server) configureTLS() (*tls.Config, error) {
 
 	// Configure client certificate authentication if CA is provided
 	if s.cfg.ClientCA != "" {
-		caCert, err := ioutil.ReadFile(s.cfg.ClientCA)
+		caCert, err := io.ReadFile(s.cfg.ClientCA)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read client CA certificate: %w", err)
 		}
@@ -192,14 +208,14 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
 		log.Printf("failed to encode health response: %v", err)
 	}
 }
 
 // updateDevicePosture handles posture update requests
 func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
-	deviceID := chi.URLParam(r, "deviceID")
+	deviceID := chi.URLParam(r, deviceIDParam)
 	if deviceID == "" {
 		http.Error(w, "device id required", http.StatusBadRequest)
 		return
@@ -218,7 +234,7 @@ func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusUpdated}); err != nil {
 		log.Printf("failed to encode posture update response: %v", err)
 	}
 }
@@ -284,7 +300,7 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
 		log.Printf("failed to encode registration response: %v", err)
 	}
 }
