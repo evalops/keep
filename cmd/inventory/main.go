@@ -24,7 +24,10 @@ func main() {
 
 	// Load database configuration from secrets
 	dbConfig := secretHelper.LoadDatabaseConfig()
-	dsn := secretHelper.BuildDSN(dbConfig)
+	dsn, err := secretHelper.BuildDSN(dbConfig)
+	if err != nil {
+		log.Fatalf("inventory dsn: %v", err)
+	}
 
 	// Load TLS configuration from secrets
 	tlsConfig := secretHelper.LoadTLSConfig("INVENTORY")

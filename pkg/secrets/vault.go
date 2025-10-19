@@ -11,6 +11,18 @@ import (
 )
 
 // VaultManager implements secret management using HashiCorp Vault
+const (
+	slash              = "/"
+	valueKey           = "value"
+	dataKey            = "data"
+	vaultAddrKey       = "VAULT_ADDR"
+	vaultTokenFileKey  = "VAULT_TOKEN_FILE"
+	vaultTokenKey      = "VAULT_TOKEN"
+	vaultSecretPathKey = "VAULT_SECRET_PATH"
+	vaultK8sRoleKey    = "VAULT_K8S_ROLE"
+	serviceAccountPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+)
+
 type VaultManager struct {
 	client *api.Client
 	prefix string
@@ -21,12 +33,12 @@ func NewVaultManager(cfg Config) (*VaultManager, error) {
 	vaultConfig := api.DefaultConfig()
 
 	// Set Vault address
-	if addr := cfg.Extra["VAULT_ADDR"]; addr != "" {
+	if addr := cfg.Extra[vaultAddrKey]; addr != emptyString {
 		vaultConfig.Address = addr
-	} else if addr := os.Getenv("VAULT_ADDR"); addr != "" {
+	} else if addr := os.Getenv(vaultAddrKey); addr != emptyString {
 		vaultConfig.Address = addr
 	} else {
-		return nil, fmt.Errorf("VAULT_ADDR is required")
+		return nil, fmt.Errorf("%s is required", vaultAddrKey)
 	}
 
 	client, err := api.NewClient(vaultConfig)
@@ -41,14 +53,14 @@ func NewVaultManager(cfg Config) (*VaultManager, error) {
 
 	return &VaultManager{
 		client: client,
-		prefix: cfg.Extra["VAULT_SECRET_PATH"],
+		prefix: cfg.Extra[vaultSecretPathKey],
 	}, nil
 }
 
 // authenticateVault handles Vault authentication using various methods
 func authenticateVault(client *api.Client, cfg Config) error {
 	// Try token file first
-	if tokenFile := cfg.Extra["VAULT_TOKEN_FILE"]; tokenFile != "" {
+	if tokenFile := cfg.Extra[vaultTokenFileKey]; tokenFile != emptyString {
 		token, err := readSecretFile(tokenFile)
 		if err != nil {
 			return fmt.Errorf("failed to read token file %s: %w", tokenFile, err)
@@ -58,21 +70,21 @@ func authenticateVault(client *api.Client, cfg Config) error {
 	}
 
 	// Try direct token
-	if token := cfg.Extra["VAULT_TOKEN"]; token != "" {
+	if token := cfg.Extra[vaultTokenKey]; token != emptyString {
 		client.SetToken(token)
 		return nil
 	}
 
 	// Try environment token
-	if token := os.Getenv("VAULT_TOKEN"); token != "" {
+	if token := os.Getenv(vaultTokenKey); token != emptyString {
 		client.SetToken(token)
 		return nil
 	}
 
 	// Try Kubernetes authentication
-	if serviceAccountTokenFile := "/var/run/secrets/kubernetes.io/serviceaccount/token"; fileExists(serviceAccountTokenFile) {
-		if role := cfg.Extra["VAULT_K8S_ROLE"]; role != "" {
-			return authenticateKubernetes(client, serviceAccountTokenFile, role)
+	if fileExists(serviceAccountPath) {
+		if role := cfg.Extra[vaultK8sRoleKey]; role != emptyString {
+			return authenticateKubernetes(client, serviceAccountPath, role)
 		}
 	}
 
@@ -105,7 +117,7 @@ func authenticateKubernetes(client *api.Client, tokenFile, role string) error {
 }
 
 // GetSecret retrieves a secret from Vault
-func (m *VaultManager) GetSecret(ctx context.Context, key string) (string, error) {
+func (m *VaultManager) GetSecret(_ context.Context, key string) (string, error) {
 	secretPath := m.buildSecretPath(key)
 
 	secret, err := m.client.Logical().Read(secretPath)
@@ -119,12 +131,12 @@ func (m *VaultManager) GetSecret(ctx context.Context, key string) (string, error
 
 	// Handle KV v2 (data wrapper)
 	data := secret.Data
-	if dataMap, ok := data["data"].(map[string]interface{}); ok {
+	if dataMap, ok := data[dataKey].(map[string]interface{}); ok {
 		data = dataMap
 	}
 
 	// Get the value
-	value, ok := data["value"]
+	value, ok := data[valueKey]
 	if !ok {
 		// Try the key name itself
 		value, ok = data[filepath.Base(key)]
@@ -161,13 +173,13 @@ func (m *VaultManager) SetSecret(ctx context.Context, key, value string) error {
 	secretPath := m.buildSecretPath(key)
 
 	data := map[string]interface{}{
-		"value": value,
+		valueKey: value,
 	}
 
 	// Handle KV v2 (data wrapper)
 	if m.isKVv2() {
 		data = map[string]interface{}{
-			"data": data,
+			dataKey: data,
 		}
 	}
 
@@ -181,11 +193,11 @@ func (m *VaultManager) SetSecret(ctx context.Context, key, value string) error {
 
 // buildSecretPath constructs the full secret path with prefix
 func (m *VaultManager) buildSecretPath(key string) string {
-	if m.prefix == "" {
+	if m.prefix == emptyString {
 		return key
 	}
 
-	return strings.TrimSuffix(m.prefix, "/") + "/" + strings.TrimPrefix(key, "/")
+	return strings.TrimSuffix(m.prefix, slash) + slash + strings.TrimPrefix(key, slash)
 }
 
 // isKVv2 checks if we're using KV secrets engine v2

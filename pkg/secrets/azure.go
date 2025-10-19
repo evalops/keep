@@ -11,6 +11,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets"
 )
 
+const (
+	azureKeyVaultURLKey = "AZURE_KEYVAULT_URL"
+	azureClientIDKey    = "AZURE_CLIENT_ID"
+	dashRune            = '-'
+	defaultSecretName   = "secret"
+)
+
 // AzureManager implements secret management using Azure Key Vault
 type AzureManager struct {
 	client   *azsecrets.Client
@@ -19,10 +26,10 @@ type AzureManager struct {
 
 // NewAzureManager creates a new Azure Key Vault-based secret manager
 func NewAzureManager(cfg Config) (*AzureManager, error) {
-	vaultURL := cfg.Extra["AZURE_KEYVAULT_URL"]
-	if vaultURL == "" {
-		if vaultURL = os.Getenv("AZURE_KEYVAULT_URL"); vaultURL == "" {
-			return nil, fmt.Errorf("AZURE_KEYVAULT_URL is required")
+	vaultURL := cfg.Extra[azureKeyVaultURLKey]
+	if vaultURL == emptyString {
+		if vaultURL = os.Getenv(azureKeyVaultURLKey); vaultURL == emptyString {
+			return nil, fmt.Errorf("%s is required", azureKeyVaultURLKey)
 		}
 	}
 
@@ -46,7 +53,7 @@ func NewAzureManager(cfg Config) (*AzureManager, error) {
 // createAzureCredential creates an appropriate Azure credential
 func createAzureCredential(cfg Config) (azcore.TokenCredential, error) {
 	// Try managed identity first (recommended for Azure-hosted applications)
-	if clientID := cfg.Extra["AZURE_CLIENT_ID"]; clientID != "" {
+	if clientID := cfg.Extra[azureClientIDKey]; clientID != emptyString {
 		cred, err := azidentity.NewManagedIdentityCredential(&azidentity.ManagedIdentityCredentialOptions{
 			ID: azidentity.ClientID(clientID),
 		})
@@ -69,13 +76,13 @@ func (m *AzureManager) GetSecret(ctx context.Context, key string) (string, error
 	secretName := m.normalizeSecretName(key)
 
 	// Get the latest version of the secret
-	resp, err := m.client.GetSecret(ctx, secretName, "", nil)
+	resp, err := m.client.GetSecret(ctx, secretName, emptyString, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to get secret %s: %w", secretName, err)
+		return emptyString, fmt.Errorf("failed to get secret %s: %w", secretName, err)
 	}
 
 	if resp.Value == nil {
-		return "", fmt.Errorf("secret %s has no value", secretName)
+		return emptyString, fmt.Errorf("secret %s has no value", secretName)
 	}
 
 	return *resp.Value, nil
@@ -117,20 +124,20 @@ func (m *AzureManager) SetSecret(ctx context.Context, key, value string) error {
 func (m *AzureManager) normalizeSecretName(name string) string {
 	// Replace invalid characters with dashes
 	normalized := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == dashRune {
 			return r
 		}
-		return '-'
+		return dashRune
 	}, name)
 
 	// Remove leading/trailing dashes and ensure it starts with a letter or number
-	normalized = strings.Trim(normalized, "-")
+	normalized = strings.Trim(normalized, string(dashRune))
 	if len(normalized) == 0 {
-		normalized = "secret"
+		normalized = defaultSecretName
 	}
 
 	// Ensure it starts with alphanumeric
-	if normalized[0] == '-' {
+	if normalized[0] == dashRune {
 		normalized = "s" + normalized
 	}
 

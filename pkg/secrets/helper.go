@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -55,13 +56,16 @@ func (h *Helper) GetOrDefault(key, defaultValue string) string {
 	return value
 }
 
-// GetRequired gets a required secret, logging a fatal error if not found
-func (h *Helper) GetRequired(key string) string {
+// GetRequired gets a required secret, returning an error if not found
+func (h *Helper) GetRequired(key string) (string, error) {
 	value, err := h.manager.GetSecret(h.ctx, key)
-	if err != nil || value == "" {
-		log.Fatalf("Required secret not found: %s", key)
+	if err != nil {
+		return "", err
 	}
-	return value
+	if value == "" {
+		return "", fmt.Errorf("required secret not found: %s", key)
+	}
+	return value, nil
 }
 
 // GetMultipleOrDefaults gets multiple secrets with fallback defaults
@@ -125,18 +129,19 @@ func (h *Helper) LoadAPIKeys() map[string]string {
 }
 
 // BuildDSN builds a database connection string from secret values
-func (h *Helper) BuildDSN(dbConfig map[string]string) string {
-	if dbConfig["POSTGRES_PASSWORD"] == "" {
-		log.Fatal("POSTGRES_PASSWORD is required")
+func (h *Helper) BuildDSN(dbConfig map[string]string) (string, error) {
+	password, ok := dbConfig["POSTGRES_PASSWORD"]
+	if !ok || password == "" {
+		return "", fmt.Errorf("POSTGRES_PASSWORD is required")
 	}
 
 	return BuildPostgresDSN(
 		dbConfig["POSTGRES_USER"],
-		dbConfig["POSTGRES_PASSWORD"],
+		password,
 		dbConfig["POSTGRES_HOST"],
 		dbConfig["POSTGRES_PORT"],
 		dbConfig["POSTGRES_DB"],
-	)
+	), nil
 }
 
 // BuildPostgresDSN builds a PostgreSQL connection string

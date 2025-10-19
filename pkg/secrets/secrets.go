@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const emptyString = ""
+
 // Manager defines the interface for secret management
 type Manager interface {
 	GetSecret(ctx context.Context, key string) (string, error)
@@ -31,7 +33,7 @@ func NewManager(cfg Config) (Manager, error) {
 		return NewVaultManager(cfg)
 	case "azure":
 		return NewAzureManager(cfg)
-	case "env", "":
+	case "env", emptyString:
 		return NewEnvManager(cfg), nil
 	default:
 		return nil, fmt.Errorf("unsupported secret manager type: %s", cfg.Type)
@@ -41,7 +43,7 @@ func NewManager(cfg Config) (Manager, error) {
 // GetSecret is a convenience function to get a single secret
 func GetSecret(ctx context.Context, manager Manager, key, fallback string) string {
 	value, err := manager.GetSecret(ctx, key)
-	if err != nil || value == "" {
+	if err != nil || value == emptyString {
 		return fallback
 	}
 	return value
@@ -58,14 +60,14 @@ func NewEnvManager(cfg Config) *EnvManager {
 }
 
 // GetSecret retrieves a secret from environment variables
-func (m *EnvManager) GetSecret(ctx context.Context, key string) (string, error) {
+func (m *EnvManager) GetSecret(_ context.Context, key string) (string, error) {
 	envKey := key
-	if m.prefix != "" {
+	if m.prefix != emptyString {
 		envKey = m.prefix + key
 	}
 
 	value := os.Getenv(envKey)
-	if value == "" {
+	if value == emptyString {
 		return "", fmt.Errorf("secret not found: %s", key)
 	}
 
@@ -88,9 +90,9 @@ func (m *EnvManager) GetSecrets(ctx context.Context, keys []string) (map[string]
 }
 
 // SetSecret sets a secret in environment variables (not persistent)
-func (m *EnvManager) SetSecret(ctx context.Context, key, value string) error {
+func (m *EnvManager) SetSecret(_ context.Context, key, value string) error {
 	envKey := key
-	if m.prefix != "" {
+	if m.prefix != emptyString {
 		envKey = m.prefix + key
 	}
 

@@ -26,7 +26,10 @@ func main() {
 
 	// Load database configuration
 	dbConfig := secretHelper.LoadDatabaseConfig()
-	databaseURL := secretHelper.BuildDSN(dbConfig)
+	databaseURL, err := secretHelper.BuildDSN(dbConfig)
+	if err != nil {
+		log.Fatalf("migrate dsn: %v", err)
+	}
 
 	// Create migrator instance
 	m, err := migrate.New(*migrationsDir, databaseURL)
