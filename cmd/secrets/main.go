@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -112,7 +111,12 @@ func handleGet(ctx context.Context, manager secrets.Manager, key, format string)
 		log.Fatalf("Failed to get secret %s: %v", key, err)
 	}
 
-	writeOutput(format, map[string]string{key: secretValue}, func() { fmt.Println(secretValue) })
+	switch format {
+	case formatJSON:
+		fmt.Printf("{\"%s\":\"%s\"}\n", key, secretValue)
+	default:
+		fmt.Println(secretValue)
+	}
 }
 
 func handleSet(ctx context.Context, manager secrets.Manager, key, value string) {
@@ -140,12 +144,24 @@ func handleList(ctx context.Context, manager secrets.Manager, format string) {
 		}
 	}
 
-	writeOutput(format, results, func() {
+	switch format {
+	case formatJSON:
+		fmt.Print("{")
+		first := true
+		for key := range results {
+			if !first {
+				fmt.Print(",")
+			}
+			fmt.Printf("\"%s\":\"[REDACTED]\"", key)
+			first = false
+		}
+		fmt.Println("}")
+	default:
 		fmt.Println("Available secrets:")
 		for key := range results {
 			fmt.Printf("  %s\n", key)
 		}
-	})
+	}
 }
 
 func handleMigrate(ctx context.Context, cfg secrets.Config) {
