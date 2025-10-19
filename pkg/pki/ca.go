@@ -25,6 +25,8 @@ const (
 	permOwnerReadExecute  = 0o750
 	permOwnerReadGroup    = 0o640
 	maxSerialShift        = 128
+	initialCapacity       = 0
+	bigIntOne             = 1
 )
 
 // validatePath ensures the path is safe from directory traversal attacks
@@ -69,7 +71,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), maxSerialShift)
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(bigIntOne), maxSerialShift)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, err
@@ -182,7 +184,7 @@ func (c *CertificateAuthority) IssueCertificate(subject pkix.Name, uris []string
 		ttl = defaultCertificateTTL
 	}
 
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), maxSerialShift))
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(bigIntOne), maxSerialShift))
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +230,7 @@ func (c *CertificateAuthority) SignCSR(csr *x509.CertificateRequest, ttl time.Du
 	if ttl == 0 {
 		ttl = defaultCertificateTTL
 	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), maxSerialShift))
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(bigIntOne), maxSerialShift))
 	if err != nil {
 		return nil, err
 	}

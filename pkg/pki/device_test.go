@@ -491,7 +491,7 @@ func BenchmarkGenerateSigningKey(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := initialCapacity; i < b.N; i++ {
 		keyPath := filepath.Join(tmpDir, benchKeyName)
 		_, err := GenerateSigningKey(keyPath)
 		if err != nil {
@@ -511,7 +511,7 @@ func BenchmarkCreateCSR(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := initialCapacity; i < b.N; i++ {
 		_, err := CreateCSR(priv, "bench-device")
 		if err != nil {
 			b.Fatalf("CreateCSR failed: %v", err)
@@ -529,7 +529,7 @@ func BenchmarkPublicKeyPEM(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := initialCapacity; i < b.N; i++ {
 		_, err := PublicKeyPEM(priv)
 		if err != nil {
 			b.Fatalf("PublicKeyPEM failed: %v", err)
