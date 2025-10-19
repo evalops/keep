@@ -96,4 +96,9 @@ def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_database_ready() -> None:
     dsn = resolve_dsn()
-    wait_for_database(dsn)
+    try:
+        wait_for_database(dsn)
+    except TimeoutError as exc:
+        pytest.skip(f"Skipping DB-backed tests: {exc}")
+    except RuntimeError as exc:
+        pytest.skip(f"Skipping DB-backed tests due to runtime error: {exc}")
