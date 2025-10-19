@@ -15,20 +15,30 @@ import (
 	"time"
 )
 
+const (
+	defaultCAValidity      = 10 * 365 * 24 * time.Hour
+	defaultCertificateTTL  = 8 * time.Hour
+	defaultClockSkew       = 5 * time.Minute
+	permOwnerReadWrite     = 0o600
+	permOwnerReadWriteExec = 0o750
+	permOwnerReadGroupRead = 0o640
+	maxSerialShift         = 128
+)
+
 type CertificateAuthority struct {
-    cert     *x509.Certificate
-    key      *ecdsa.PrivateKey
-    certPath string
-    keyPath  string
+	cert     *x509.Certificate
+	key      *ecdsa.PrivateKey
+	certPath string
+	keyPath  string
 }
 
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
-    if err := os.MkdirAll(filepath.Dir(certPath), dirPermPrivate); err != nil {
-        return nil, err
-    }
-    if err := os.MkdirAll(filepath.Dir(keyPath), dirPermPrivate); err != nil {
-        return nil, err
-    }
+	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadWriteExec); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(keyPath), permOwnerReadWriteExec); err != nil {
+		return nil, err
+	}
 
 	if _, err := os.Stat(certPath); err == nil {
 		return LoadCA(certPath, keyPath)
@@ -43,7 +53,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	serialNumberLimit := maxSerialNumber
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), maxSerialShift)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, err
@@ -55,7 +65,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 			CommonName:   commonName,
 			Organization: []string{"keep"},
 		},
-        NotBefore:             time.Now().Add(-defaultClockSkew),
+		NotBefore:             time.Now().Add(-defaultClockSkew),
 		NotAfter:              time.Now().Add(validFor),
 		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature | x509.KeyUsageCRLSign,
 		BasicConstraintsValid: true,

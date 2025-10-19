@@ -22,12 +22,14 @@ import (
 )
 
 const (
-	defaultComponent      = "attestor-service"
-	statusHealthy         = "healthy"
-	slash                 = "/"
-	defaultHTTPTimeout    = 10 * time.Second
-	defaultSignalCapacity = 1
-	statusCodeThreshold   = 400
+	defaultComponent       = "attestor-service"
+	statusHealthy          = "healthy"
+	slash                  = "/"
+	defaultHTTPTimeout     = 10 * time.Second
+	defaultSignalCapacity  = 1
+	statusCodeThreshold    = 400
+	permOwnerReadWrite     = 0o600
+	permOwnerReadWriteExec = 0o700
 )
 
 // Config holds the service configuration
@@ -389,7 +391,7 @@ func (s *Service) httpClientOrDefault() *http.Client {
 	if s.httpClient != nil {
 		return s.httpClient
 	}
-	return newHTTPClient()
+	return &http.Client{Timeout: defaultHTTPTimeout}
 }
 
 func (s *Service) postJSON(endpoint string, payload []byte) (*http.Response, error) {
