@@ -25,7 +25,7 @@ func (c *LinuxCollector) CollectPosture() (*DevicePosture, error) {
 	// Collect firewall status
 	if err := c.collectFirewallStatus(&posture.Firewall); err != nil {
 		// Non-fatal error, continue with default values
-		posture.Firewall = FirewallStatus{Enabled: false, Service: "unknown"}
+		posture.Firewall = FirewallStatus{Enabled: false, Service: UnknownService}
 	}
 
 	// Collect other security posture information
@@ -234,5 +234,5 @@ func getUserName() string {
 	if output, err := runCommand("whoami"); err == nil {
 		return strings.TrimSpace(output)
 	}
-	return "unknown"
+	return UnknownService
 }

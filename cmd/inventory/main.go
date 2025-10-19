@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -64,7 +65,9 @@ func main() {
 	}
 
 	if err := srv.Start(ctx); err != nil {
-		log.Fatalf("inventory exit: %v", err)
+		if !errors.Is(err, context.Canceled) {
+			log.Fatalf("inventory exit: %v", err)
+		}
 	}
 }
 

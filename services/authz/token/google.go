@@ -36,79 +36,134 @@ type cacheEntry struct {
 var (
 	cacheMu    sync.Mutex
 	keyCache   = map[string]cacheEntry{}
-	httpClient = &http.Client{Timeout: 5 * time.Second}
+	httpClient = &http.Client{Timeout: defaultHTTPTimeout}
 )
+
+const (
+	expectedTokenParts   = 3
+	allowedClockSkew     = 60
+	issuerGoogleAccounts = "https://accounts.google.com"
+	algorithmRS256       = "RS256"
+	claimAudience        = "aud"
+	claimIssuer          = "iss"
+	claimExpiry          = "exp"
+	claimIssuedAt        = "iat"
+	defaultHTTPTimeout   = 5 * time.Second
+)
+
+type jwtHeader struct {
+	KeyID string `json:"kid"`
+	Alg   string `json:"alg"`
+}
 
 func VerifyGoogleJWT(ctx context.Context, rawToken, audience string) (map[string]any, error) {
 	if audience == "" {
 		return nil, errors.New("audience required")
 	}
-	parts := splitToken(rawToken)
-	if len(parts) != 3 {
+
+	parts, err := parseJWT(rawToken)
+	if err != nil {
+		return nil, err
+	}
+
+	header, err := decodeHeader(parts[0])
+	if err != nil {
+		return nil, err
+	}
+
+	if header.Alg != algorithmRS256 {
+		return nil, errors.New("unsupported algorithm")
+	}
+
+	claims, err := decodeClaims(parts[1])
+	if err != nil {
+		return nil, err
+	}
+
+	if err := verifySignature(ctx, header.KeyID, parts); err != nil {
+		return nil, err
+	}
+
+	if err := validateClaims(claims, audience); err != nil {
+		return nil, err
+	}
+
+	return claims, nil
+}
+
+func parseJWT(token string) ([]string, error) {
+	parts := splitToken(token)
+	if len(parts) != expectedTokenParts {
 		return nil, errors.New("invalid jwt format")
 	}
+	return parts, nil
+}
 
-	headers, err := decodeSegment(parts[0])
+func decodeHeader(headerSegment string) (jwtHeader, error) {
+	raw, err := decodeSegment(headerSegment)
 	if err != nil {
-		return nil, fmt.Errorf("decode header: %w", err)
+		return jwtHeader{}, fmt.Errorf("decode header: %w", err)
 	}
 
-	claimsJSON, err := decodeSegment(parts[1])
+	var header jwtHeader
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return jwtHeader{}, err
+	}
+	return header, nil
+}
+
+func decodeClaims(claimSegment string) (map[string]any, error) {
+	raw, err := decodeSegment(claimSegment)
 	if err != nil {
 		return nil, fmt.Errorf("decode claims: %w", err)
 	}
 
-	var header struct {
-		KeyID string `json:"kid"`
-		Alg   string `json:"alg"`
-	}
-	if err := json.Unmarshal(headers, &header); err != nil {
+	var claims map[string]any
+	if err := json.Unmarshal(raw, &claims); err != nil {
 		return nil, err
 	}
+	return claims, nil
+}
 
-	if header.Alg != "RS256" {
-		return nil, errors.New("unsupported algorithm")
-	}
-
-	pubKey, err := fetchGooglePublicKey(ctx, header.KeyID)
+func verifySignature(ctx context.Context, kid string, parts []string) error {
+	pubKey, err := fetchGooglePublicKey(ctx, kid)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	signed := []byte(parts[0] + "." + parts[1])
-	h := sha256.Sum256(signed)
-	if err := rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, h[:], sig); err != nil {
-		return nil, err
+	hash := sha256.Sum256(signed)
+	return rsa.VerifyPKCS1v15(pubKey, crypto.SHA256, hash[:], signature)
+}
+
+func validateClaims(claims map[string]any, audience string) error {
+	aud, ok := claims[claimAudience].(string)
+	if !ok || aud != audience {
+		return errors.New("audience mismatch")
 	}
 
-	var claims map[string]any
-	if err := json.Unmarshal(claimsJSON, &claims); err != nil {
-		return nil, err
-	}
-
-	if aud, ok := claims["aud"].(string); !ok || aud != audience {
-		return nil, errors.New("audience mismatch")
-	}
-
-	if iss, ok := claims["iss"].(string); !ok || iss != "https://accounts.google.com" {
-		return nil, errors.New("issuer mismatch")
+	iss, ok := claims[claimIssuer].(string)
+	if !ok || iss != issuerGoogleAccounts {
+		return errors.New("issuer mismatch")
 	}
 
 	now := time.Now().Unix()
-	if exp, ok := claims["exp"].(float64); !ok || int64(exp) < now {
-		return nil, errors.New("token expired")
+	exp, ok := claims[claimExpiry].(float64)
+	if !ok || int64(exp) < now {
+		return errors.New("token expired")
 	}
 
-	if iat, ok := claims["iat"].(float64); !ok || int64(iat) > now+60 {
-		return nil, errors.New("invalid issued time")
+	iat, ok := claims[claimIssuedAt].(float64)
+	if !ok || int64(iat) > now+allowedClockSkew {
+		return errors.New("invalid issued time")
 	}
 
-	return claims, nil
+	return nil
 }
 
 func fetchGooglePublicKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {

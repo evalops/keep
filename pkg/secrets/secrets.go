@@ -7,7 +7,9 @@ import (
 	"strings"
 )
 
-const emptyString = ""
+const (
+	emptyString = ""
+)
 
 // Manager defines the interface for secret management
 type Manager interface {

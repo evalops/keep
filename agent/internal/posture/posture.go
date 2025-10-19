@@ -14,12 +14,12 @@ import (
 type DevicePosture struct {
 	OS            OperatingSystem `json:"os"`
 	Firewall      FirewallStatus  `json:"firewall"`
+	TrustScore    int             `json:"trust_score"`
+	Status        string          `json:"status"`
 	AntiVirus     bool            `json:"antivirus_enabled"`
 	SystemUpdate  bool            `json:"system_updated"`
 	DiskEncrypted bool            `json:"disk_encrypted"`
 	ScreenLock    bool            `json:"screen_lock_enabled"`
-	TrustScore    int             `json:"trust_score"`
-	Status        string          `json:"status"`
 }
 
 // OperatingSystem contains OS information
@@ -72,48 +72,42 @@ func (p *DevicePosture) ToJSON() (string, error) {
 func (p *DevicePosture) CalculateTrustScore() {
 	score := 0
 
-	// OS support (20 points)
 	if p.OS.Supported {
-		score += 20
+		score += TrustBonusOS
 	}
 
-	// Firewall enabled (25 points)
 	if p.Firewall.Enabled {
-		score += 25
+		score += TrustBonusFirewall
 	}
 
-	// Antivirus (15 points)
 	if p.AntiVirus {
-		score += 15
+		score += TrustBonusAntiVirus
 	}
 
-	// System updated (20 points)
 	if p.SystemUpdate {
-		score += 20
+		score += TrustBonusUpdate
 	}
 
-	// Disk encryption (15 points)
 	if p.DiskEncrypted {
-		score += 15
+		score += TrustBonusEncrypted
 	}
 
-	// Screen lock (5 points)
 	if p.ScreenLock {
-		score += 5
+		score += TrustBonusScreenLock
 	}
 
 	p.TrustScore = score
 
 	// Set status based on score
 	switch {
-	case score >= 80:
-		p.Status = "healthy"
-	case score >= 60:
-		p.Status = "compliant"
-	case score >= 40:
-		p.Status = "warning"
+	case score >= TrustThresholdHealthy:
+		p.Status = StatusHealthy
+	case score >= TrustThresholdCompliant:
+		p.Status = StatusCompliant
+	case score >= TrustThresholdWarning:
+		p.Status = StatusWarning
 	default:
-		p.Status = "critical"
+		p.Status = StatusCritical
 	}
 }
 

@@ -44,7 +44,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				ScreenLock:    true,
 			},
 			expectedScore:  100,
-			expectedStatus: "healthy",
+			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "good security posture",
@@ -57,7 +57,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				ScreenLock:    true,
 			},
 			expectedScore:  85,
-			expectedStatus: "healthy",
+			expectedStatus: StatusHealthy,
 		},
 		{
 			name: "compliant security posture",
@@ -70,7 +70,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				ScreenLock:    false,
 			},
 			expectedScore:  60,
-			expectedStatus: "compliant",
+			expectedStatus: StatusCompliant,
 		},
 		{
 			name: "warning security posture",
@@ -83,7 +83,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				ScreenLock:    true,
 			},
 			expectedScore:  30,
-			expectedStatus: "critical",
+			expectedStatus: StatusCritical,
 		},
 		{
 			name: "critical security posture",
@@ -96,7 +96,7 @@ func TestDevicePosture_CalculateTrustScore(t *testing.T) {
 				ScreenLock:    false,
 			},
 			expectedScore:  0,
-			expectedStatus: "critical",
+			expectedStatus: StatusCritical,
 		},
 	}
 
@@ -135,7 +135,7 @@ func TestDevicePosture_ToJSON(t *testing.T) {
 		DiskEncrypted: true,
 		ScreenLock:    true,
 		TrustScore:    85,
-		Status:        "healthy",
+		Status:        StatusHealthy,
 	}
 
 	jsonStr, err := posture.ToJSON()

@@ -131,8 +131,7 @@ func TestServer_tailscaleStatusHandler(t *testing.T) {
 }
 
 // createTestServer creates a minimal server for testing
-func createTestServer(t *testing.T) *Server {
-	// Create a minimal test configuration
+func createTestServer(_ *testing.T) *Server {
 	cfg := Config{
 		HTTPAddr:       ":8443",
 		GoogleClientID: "test-client-id",
@@ -140,15 +139,11 @@ func createTestServer(t *testing.T) *Server {
 		InventoryAPI:   "http://test-inventory:8080",
 	}
 
-	// We can't use the real PKI here because it would create a dependency
-	// So we'll create a minimal server instance
-	server := &Server{
+	return &Server{
 		cfg:       cfg,
-		client:    &http.Client{Timeout: 5 * time.Second},
-		invClient: &http.Client{Timeout: 3 * time.Second},
+		client:    &http.Client{Timeout: defaultClientTimeout},
+		invClient: &http.Client{Timeout: defaultInventoryTimeout},
 	}
-
-	return server
 }
 
 // TestServer_envoyAuthHandler tests the Envoy auth handler
@@ -407,7 +402,7 @@ func TestServer_evaluateOPA(t *testing.T) {
 }
 
 // createTestServerWithMocks creates a test server with mock OPA and inventory URLs
-func createTestServerWithMocks(t *testing.T, opaURL, inventoryURL string) *Server {
+func createTestServerWithMocks(_ *testing.T, opaURL, inventoryURL string) *Server {
 	cfg := Config{
 		HTTPAddr:       ":8443",
 		GoogleClientID: "test-client-id",
@@ -415,13 +410,11 @@ func createTestServerWithMocks(t *testing.T, opaURL, inventoryURL string) *Serve
 		InventoryAPI:   inventoryURL,
 	}
 
-	server := &Server{
+	return &Server{
 		cfg:       cfg,
-		client:    &http.Client{Timeout: 5 * time.Second},
-		invClient: &http.Client{Timeout: 3 * time.Second},
+		client:    &http.Client{Timeout: defaultClientTimeout},
+		invClient: &http.Client{Timeout: defaultInventoryTimeout},
 	}
-
-	return server
 }
 
 // TestServer_lookupDevice tests the device lookup functionality

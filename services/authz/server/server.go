@@ -31,6 +31,21 @@ import (
 	"github.com/EvalOps/keep/services/authz/token"
 )
 
+const (
+	defaultClientTimeout     = 5 * time.Second
+	defaultInventoryTimeout  = 3 * time.Second
+	defaultReadHeaderTimeout = 10 * time.Second
+	defaultReadTimeout       = 30 * time.Second
+	defaultWriteTimeout      = 30 * time.Second
+	defaultIdleTimeout       = 60 * time.Second
+	defaultInitialInterval   = 200 * time.Millisecond
+	defaultRetryMultiplier   = 1.5
+	defaultMaxInterval       = 2 * time.Second
+	errDecodeRequest         = "bad request"
+	errMissingMFAParams      = "missing MFA parameters"
+	errMethodNotAllowed      = "method not allowed"
+)
+
 type Server struct {
 	cfg        Config
 	httpSrv    *http.Server
@@ -77,12 +92,12 @@ func New(cfg Config) (*Server, error) {
 
 	log.Printf("Loaded external CA certificate from %s", cfg.RootCAPath)
 
-	client := telemetry.WrapClient(&http.Client{Timeout: 5 * time.Second})
+	client := telemetry.WrapClient(&http.Client{Timeout: defaultClientTimeout})
 	retryCfg := retry.Config{
 		MaxElapsedTime:  cfg.RetryMaxElapsed,
-		InitialInterval: 200 * time.Millisecond,
-		Multiplier:      1.5,
-		MaxInterval:     2 * time.Second,
+		InitialInterval: defaultInitialInterval,
+		Multiplier:      defaultRetryMultiplier,
+		MaxInterval:     defaultMaxInterval,
 	}
 
 	// Configure inventory client with optional mTLS
@@ -115,7 +130,7 @@ func New(cfg Config) (*Server, error) {
 	r.Use(s.loggingMiddleware)
 	r.Use(s.metricsMiddleware)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(middleware.Timeout(defaultReadTimeout))
 
 	// Health and metrics endpoints
 	r.Get("/health", s.healthHandler)
@@ -282,12 +297,12 @@ type verifyResponse struct {
 
 func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 	var req verifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, errDecodeRequest, http.StatusBadRequest)
 		return
 	}
 
@@ -311,7 +326,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -326,7 +341,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, errDecodeRequest, http.StatusBadRequest)
 		return
 	}
 
@@ -594,12 +609,12 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 
 func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 	var req deviceCertRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		http.Error(w, errDecodeRequest, http.StatusBadRequest)
 		return
 	}
 	if strings.TrimSpace(req.DeviceID) == "" {
@@ -637,7 +652,7 @@ func (s *Server) deviceCertHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) caHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 	w.Header().Set("Content-Type", "application/x-pem-file")
@@ -791,7 +806,7 @@ func (s *Server) validateTailscaleAccess(r *http.Request) bool {
 // tailscaleStatusHandler provides Tailscale network status information
 func (s *Server) tailscaleStatusHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -855,7 +870,7 @@ func (s *Server) metricsMiddleware(next http.Handler) http.Handler {
 // mfaVerifyHandler handles MFA verification from Envoy Lua filter
 func (s *Server) mfaVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, errMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -863,7 +878,7 @@ func (s *Server) mfaVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	code := r.Header.Get("x-mfa-code")
 
 	if sessionID == "" || code == "" {
-		http.Error(w, "missing MFA parameters", http.StatusBadRequest)
+		http.Error(w, errMissingMFAParams, http.StatusBadRequest)
 		return
 	}
 

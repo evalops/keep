@@ -20,6 +20,7 @@ const (
 	vaultSecretPathKey = "VAULT_SECRET_PATH"
 	vaultK8sRoleKey    = "VAULT_K8S_ROLE"
 	serviceAccountPath = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	pathSeparator      = "/"
 )
 
 type VaultManager struct {
@@ -196,7 +197,7 @@ func (m *VaultManager) buildSecretPath(key string) string {
 		return key
 	}
 
-	return strings.TrimSuffix(m.prefix, slash) + slash + strings.TrimPrefix(key, slash)
+	return strings.TrimSuffix(m.prefix, pathSeparator) + pathSeparator + strings.TrimPrefix(key, pathSeparator)
 }
 
 // isKVv2 checks if we're using KV secrets engine v2

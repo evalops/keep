@@ -135,9 +135,9 @@ func (m *SSMManager) buildParameterName(key string) string {
 	}
 
 	// Ensure prefix starts with / and ends with /
-	prefix := strings.TrimSuffix(strings.TrimPrefix(m.prefix, slash), slash)
+	prefix := strings.TrimSuffix(strings.TrimPrefix(m.prefix, pathSeparator), pathSeparator)
 	if prefix != emptyString {
-		return fmt.Sprintf("%s%s%s%s", slash, prefix, slash, strings.TrimPrefix(key, slash))
+		return fmt.Sprintf("%s%s%s%s", pathSeparator, prefix, pathSeparator, strings.TrimPrefix(key, pathSeparator))
 	}
 
 	return key

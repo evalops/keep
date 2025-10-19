@@ -7,7 +7,6 @@ import (
 
 const (
 	newlineSeparator     = "\n"
-	ruleNamePrefix       = "Rule Name:"
 	displayNamePrefix    = "displayName="
 	displayNamePrefixLen = len(displayNamePrefix)
 	powershellCmd        = "powershell"
@@ -34,7 +33,7 @@ func (c *WindowsCollector) CollectPosture() (*DevicePosture, error) {
 	// Collect firewall status
 	if err := c.collectFirewallStatus(&posture.Firewall); err != nil {
 		// Non-fatal error, continue with default values
-		posture.Firewall = FirewallStatus{Enabled: false, Service: "unknown"}
+		posture.Firewall = FirewallStatus{Enabled: false, Service: UnknownService}
 	}
 
 	// Collect other security posture information
@@ -102,7 +101,7 @@ func (c *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 			lines := strings.Split(ruleOutput, newlineSeparator)
 			ruleCount := 0
 			for _, line := range lines {
-				if strings.HasPrefix(strings.TrimSpace(line), ruleNamePrefix) {
+				if strings.HasPrefix(strings.TrimSpace(line), RuleNamePrefix) {
 					ruleCount++
 				}
 			}

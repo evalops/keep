@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"strconv"
@@ -60,8 +61,14 @@ func main() {
 		log.Fatalf("failed to create authz server: %v", err)
 	}
 
-	if err := srv.Start(context.Background()); err != nil {
-		log.Fatalf("server exited: %v", err)
+	ctx := context.Background()
+	runErr := srv.Start(ctx)
+	if runErr == nil {
+		return
+	}
+
+	if !errors.Is(runErr, context.Canceled) {
+		log.Fatalf("server exited: %v", runErr)
 	}
 }
 

@@ -25,7 +25,7 @@ func (c *MacOSCollector) CollectPosture() (*DevicePosture, error) {
 	// Collect firewall status
 	if err := c.collectFirewallStatus(&posture.Firewall); err != nil {
 		// Non-fatal error, continue with default values
-		posture.Firewall = FirewallStatus{Enabled: false, Service: "unknown"}
+		posture.Firewall = FirewallStatus{Enabled: false, Service: UnknownService}
 	}
 
 	// Collect other security posture information
@@ -48,12 +48,12 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 		return err
 	}
 
-	lines := strings.Split(output, "\n")
+	lines := strings.Split(output, newline)
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		if strings.HasPrefix(line, "System Version:") {
-			parts := strings.SplitN(line, ":", 2)
+		if strings.HasPrefix(line, macOSVersionKey) {
+			parts := strings.SplitN(line, colonSeparator, 2)
 			if len(parts) == 2 {
 				versionInfo := strings.TrimSpace(parts[1])
 				// Parse "macOS Monterey 12.6.1 (21G217)"
@@ -68,15 +68,15 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 
 				// Extract version number
 				parts = strings.Fields(versionInfo)
-				if len(parts) >= 3 {
-					os.Name = strings.Join(parts[:2], " ") // "macOS Monterey"
-					os.Version = parts[2]                  // "12.6.1"
+				if len(parts) >= minPartsTriple {
+					os.Name = strings.Join(parts[:2], spaceSeparator)
+					os.Version = parts[2]
 				} else if len(parts) >= 2 {
 					os.Version = parts[len(parts)-1]
 				}
 			}
-		} else if strings.HasPrefix(line, "Kernel Version:") {
-			parts := strings.SplitN(line, ":", 2)
+		} else if strings.HasPrefix(line, macOSKernelKey) {
+			parts := strings.SplitN(line, colonSeparator, 2)
 			if len(parts) == 2 {
 				os.Kernel = strings.TrimSpace(parts[1])
 			}
@@ -91,7 +91,7 @@ func (c *MacOSCollector) collectOSInfo(os *OperatingSystem) error {
 
 // collectFirewallStatus checks macOS firewall status
 func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
-	fw.Service = "pf"
+	fw.Service = macOSFirewallService
 
 	// Check if firewall is enabled
 	output, err := runCommand("defaults", "read", "/Library/Preferences/com.apple.alf", "globalstate")
@@ -100,11 +100,11 @@ func (c *MacOSCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	}
 
 	state := strings.TrimSpace(output)
-	fw.Enabled = state == "1" || state == "2" // 1 = on, 2 = on with stealth mode
+	fw.Enabled = state == macOSFirewallEnabled || state == macOSFirewallStealth
 
 	// Get firewall rules (simplified - macOS firewall is less rule-based)
 	if fw.Enabled {
-		fw.Rules = 1 // Simplified - just indicate it's configured
+		fw.Rules = 1
 	}
 
 	return nil
@@ -154,8 +154,9 @@ func (c *MacOSCollector) checkSystemUpdated() bool {
 	}
 
 	// If no updates, the output will contain "No new software available"
-	return strings.Contains(strings.ToLower(output), "no new software available") ||
-		strings.Contains(strings.ToLower(output), "no updates available")
+	lowerOutput := strings.ToLower(output)
+	return strings.Contains(lowerOutput, macOSUpdateNoNew) ||
+		strings.Contains(lowerOutput, macOSUpdateNoUpdates)
 }
 
 // checkDiskEncryption checks if FileVault is enabled
@@ -165,26 +166,26 @@ func (c *MacOSCollector) checkDiskEncryption() bool {
 		return false
 	}
 
-	return strings.Contains(strings.ToLower(output), "filevault is on")
+	return strings.Contains(strings.ToLower(output), macOSFileVaultOn)
 }
 
 // checkScreenLock checks if screen lock/password is required
 func (c *MacOSCollector) checkScreenLock() bool {
 	// Check if password is required after screensaver
-	output, err := runCommand("defaults", "read", "com.apple.screensaver", "askForPassword")
-	if err == nil && strings.Contains(output, "1") {
+	output, err := runCommand("defaults", "read", "com.apple.screensaver", macOSScreenPassword)
+	if err == nil && strings.Contains(output, macOSPasswordEnabled) {
 		return true
 	}
 
 	// Check if password is required after sleep
 	output, err = runCommand("pmset", "-g")
-	if err == nil && strings.Contains(strings.ToLower(output), "sleep") {
+	if err == nil && strings.Contains(strings.ToLower(output), macOSSleepKeyword) {
 		// If sleep is configured, assume password is required
 		return true
 	}
 
 	// Check System Preferences security settings
-	output, err = runCommand("defaults", "read", "com.apple.screensaver", "askForPasswordDelay")
+	output, err = runCommand("defaults", "read", "com.apple.screensaver", macOSScreenDelay)
 	if err == nil {
 		return true
 	}

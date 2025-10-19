@@ -9,17 +9,17 @@ type DefaultCollector struct{}
 func (c *DefaultCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
 		OS: OperatingSystem{
-			Name:      "Unknown",
-			Version:   "Unknown",
-			Build:     "Unknown",
+			Name:      UnknownValue,
+			Version:   UnknownValue,
+			Build:     UnknownValue,
 			Arch:      runtime.GOARCH,
-			Kernel:    "Unknown",
+			Kernel:    UnknownValue,
 			Supported: false,
 		},
 		Firewall: FirewallStatus{
 			Enabled: false,
-			Rules:   0,
-			Service: "unknown",
+			Rules:   DefaultRules,
+			Service: UnknownService,
 		},
 		AntiVirus:     false,
 		SystemUpdate:  false,
