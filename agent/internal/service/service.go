@@ -22,14 +22,14 @@ import (
 )
 
 const (
-	defaultComponent       = "attestor-service"
-	statusHealthy          = "healthy"
-	slash                  = "/"
-	defaultHTTPTimeout     = 10 * time.Second
-	defaultSignalCapacity  = 1
-	statusCodeThreshold    = 400
-	permOwnerReadWrite     = 0o600
-	permOwnerReadWriteExec = 0o700
+	defaultComponent      = "attestor-service"
+	statusHealthy         = "healthy"
+	slash                 = "/"
+	defaultHTTPTimeout    = 10 * time.Second
+	defaultSignalCapacity = 1
+	statusCodeThreshold   = 400
+	permOwnerReadWrite    = 0o600
+	permOwnerReadExecute  = 0o700
 )
 
 // Config holds the service configuration
@@ -85,7 +85,7 @@ func New(config *Config) *Service {
 	return &Service{
 		config:     config,
 		collector:  posture.GetCollector(),
-		httpClient: newHTTPClient(),
+		httpClient: &http.Client{Timeout: defaultHTTPTimeout},
 		ctx:        ctx,
 		cancel:     cancel,
 		logger:     logger,
@@ -358,7 +358,7 @@ func (s *Service) obtainCertificate() error {
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(s.config.CAPath), permOwnerReadWriteExec); err != nil {
+		if err := os.MkdirAll(filepath.Dir(s.config.CAPath), permOwnerReadExecute); err != nil {
 			return err
 		}
 		if err := os.WriteFile(s.config.CAPath, rawCA, permOwnerReadWrite); err != nil {

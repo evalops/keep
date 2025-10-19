@@ -13,6 +13,12 @@ import (
 	"time"
 )
 
+const (
+	testKeyName        = "test.key"
+	benchKeyName       = "bench.key"
+	msgGenerateKeyFail = "Failed to generate key: %v"
+)
+
 func TestGenerateSigningKey(t *testing.T) {
 	tmpDir := t.TempDir()
 	keyPath := filepath.Join(tmpDir, testKeyName)

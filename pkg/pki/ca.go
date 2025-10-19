@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	defaultCAValidity      = 10 * 365 * 24 * time.Hour
-	defaultCertificateTTL  = 8 * time.Hour
-	defaultClockSkew       = 5 * time.Minute
-	permOwnerReadWrite     = 0o600
-	permOwnerReadWriteExec = 0o750
-	permOwnerReadGroupRead = 0o640
-	maxSerialShift         = 128
+	defaultCAValidity     = 10 * 365 * 24 * time.Hour
+	defaultCertificateTTL = 8 * time.Hour
+	defaultClockSkew      = 5 * time.Minute
+	permOwnerReadWrite    = 0o600
+	permOwnerReadExecute  = 0o750
+	permOwnerReadGroup    = 0o640
+	maxSerialShift        = 128
 )
 
 type CertificateAuthority struct {
@@ -33,10 +33,10 @@ type CertificateAuthority struct {
 }
 
 func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration) (*CertificateAuthority, error) {
-	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadWriteExec); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadExecute); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(keyPath), permOwnerReadWriteExec); err != nil {
+	if err := os.MkdirAll(filepath.Dir(keyPath), permOwnerReadExecute); err != nil {
 		return nil, err
 	}
 
@@ -78,7 +78,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	if err := writeFileSecure(certPath, 0o640, func(f *os.File) error {
+	if err := writeFileSecure(certPath, permOwnerReadGroup, func(f *os.File) error {
 		return pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 	}); err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 	if err != nil {
 		return nil, err
 	}
-	if err := writeFileSecure(keyPath, 0o600, func(f *os.File) error {
+	if err := writeFileSecure(keyPath, permOwnerReadWrite, func(f *os.File) error {
 		return pem.Encode(f, &pem.Block{Type: "PRIVATE KEY", Bytes: encoded})
 	}); err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 }
 
 func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error) error {
-	if err := os.MkdirAll(filepath.Dir(path), dirPermPrivate); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), permOwnerReadExecute); err != nil {
 		return err
 	}
 
@@ -153,7 +153,7 @@ func (c *CertificateAuthority) IssueCertificate(subject pkix.Name, uris []string
 		ttl = defaultCertificateTTL
 	}
 
-	serial, err := rand.Int(rand.Reader, maxSerialNumber)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), maxSerialShift))
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (c *CertificateAuthority) SignCSR(csr *x509.CertificateRequest, ttl time.Du
 	if ttl == 0 {
 		ttl = defaultCertificateTTL
 	}
-	serial, err := rand.Int(rand.Reader, maxSerialNumber)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), maxSerialShift))
 	if err != nil {
 		return nil, err
 	}
