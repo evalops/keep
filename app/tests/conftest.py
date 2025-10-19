@@ -5,6 +5,8 @@ from urllib.parse import quote_plus
 
 import pytest
 
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
 TRANSIENT_CODES = {
     "08000",
     "08001",
@@ -17,6 +19,10 @@ TRANSIENT_CODES = {
 }
 
 DEFAULT_DSN = "postgresql://postgres:postgres@127.0.0.1:5432/app_test"
+# Set APP_TEST_REQUIRE_DB=1 to run Flask integration tests against a live
+# Postgres instance. By default the tests stub out database checks so they can
+# run in isolated environments such as CI.
+REQUIRE_DATABASE = os.getenv("APP_TEST_REQUIRE_DB") == "1"
 
 
 def _sqlstate(exc: Exception) -> Optional[str]:
@@ -63,6 +69,9 @@ def resolve_dsn() -> str:
 
 
 def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
+    if not REQUIRE_DATABASE:
+        return
+
     try:
         import psycopg
     except ImportError as exc:  # pragma: no cover - developer misconfiguration
@@ -95,10 +104,4 @@ def wait_for_database(dsn: str, timeout: float = 30.0) -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_database_ready() -> None:
-    dsn = resolve_dsn()
-    try:
-        wait_for_database(dsn)
-    except TimeoutError as exc:
-        pytest.skip(f"Skipping DB-backed tests: {exc}")
-    except RuntimeError as exc:
-        pytest.skip(f"Skipping DB-backed tests due to runtime error: {exc}")
+    wait_for_database(resolve_dsn())

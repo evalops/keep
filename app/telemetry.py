@@ -45,6 +45,10 @@ def instrument_flask_app(app: object) -> None:
 
 
 def setup(app: object, service_name: str, environment: Optional[str] = None) -> None:
+    if os.getenv("OTEL_SDK_DISABLED", "").lower() in {"true", "1"}:
+        _logger.info("telemetry disabled via OTEL_SDK_DISABLED")
+        return
+
     environment = environment or os.getenv("APP_ENV", "dev")
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
     insecure = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"

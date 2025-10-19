@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict, Generator, Tuple, TypeVar, cast
@@ -9,7 +10,8 @@ from flask.typing import ResponseReturnValue
 from app.telemetry import setup as telemetry_setup
 
 app = Flask(__name__)
-telemetry_setup(app, service_name="keep-app")
+if os.getenv("OTEL_SDK_DISABLED", "").lower() not in {"true", "1"}:
+    telemetry_setup(app, service_name="keep-app")
 
 F = TypeVar("F", bound=Callable[..., ResponseReturnValue])
 

@@ -1,8 +1,11 @@
+import os
 from typing import Any, Generator
 
 import pytest
 
-from app.main import app
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+from app.main import app  # noqa: E402
 
 TestClient = Any
 

@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"tailscale.com/tsnet"
 
+	"github.com/EvalOps/keep/pkg/pki"
 	"github.com/EvalOps/keep/pkg/retry"
 )
 
@@ -28,6 +30,8 @@ const (
 	testInventoryHost      = "test-inventory:8080"
 	testOPAHost            = "test-opa:8181"
 	testAuthzPort          = ":8443"
+	testRetryAttempts      = 2
+	testZeroLength         = 0
 )
 
 // TestServer_healthHandler tests the health endpoint
@@ -489,6 +493,9 @@ func TestServer_lookupDevice(t *testing.T) {
 		if result["id"] != expectedDevice["id"] || result["posture"] != expectedDevice["posture"] {
 			t.Errorf("Expected device info %v, got %v", expectedDevice, result)
 		}
+		if score, ok := result["trust_score"].(int); !ok || score != 0 {
+			t.Errorf("Expected trust_score 0 for non-JSON posture, got %v", result["trust_score"])
+		}
 	})
 
 	t.Run("handles empty device ID", func(t *testing.T) {
@@ -604,6 +611,120 @@ func TestServer_caHandler(t *testing.T) {
 
 	// Note: Testing successful CA retrieval would require setting up the CA
 	// which we avoid in unit tests to keep them lightweight
+}
+
+func TestNewInitializesServerState(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "ca.pem")
+	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+
+	t.Setenv("OTEL_SDK_DISABLED", "true")
+
+	_, err := pki.LoadOrCreateCA(certPath, keyPath, "test-ca", time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+
+	cfg := Config{
+		HTTPAddr:         "127.0.0.1:0",
+		GoogleClientID:   "client-id",
+		OPAURL:           "http://opa",
+		InventoryAPI:     "http://inventory",
+		RootCAPath:       certPath,
+		TLSCertPath:      certPath,
+		TLSKeyPath:       keyPath,
+		RequestTimeout:   time.Second,
+		RetryMaxElapsed:  defaultInitialInterval,
+		RetryMaxAttempts: testRetryAttempts,
+	}
+
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = srv.httpSrv.Close()
+	})
+
+	if srv.cfg == nil {
+		t.Fatal("server cfg should not be nil")
+	}
+	if srv.retryCfg == nil {
+		t.Fatal("server retryCfg should not be nil")
+	}
+	if srv.state.started {
+		t.Error("server should not be marked started")
+	}
+	if srv.httpSrv == nil {
+		t.Fatal("http server should be initialized")
+	}
+	if !srv.state.useTLS {
+		t.Error("expected TLS to be enabled when cert/key provided")
+	}
+	if len(srv.rootCAPEM) == testZeroLength {
+		t.Error("expected root CA PEM to be cached")
+	}
+	if srv.tsServer != nil {
+		t.Error("tailscale server should be nil when auth key not provided")
+	}
+
+	if srv.cfg.GoogleClientID != cfg.GoogleClientID {
+		t.Errorf("expected GoogleClientID %q, got %q", cfg.GoogleClientID, srv.cfg.GoogleClientID)
+	}
+}
+
+func TestSetupHTTPServerTLSAndPlain(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "ca.pem")
+	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+
+	ca, err := pki.LoadOrCreateCA(certPath, keyPath, "test-ca", time.Hour)
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+	handler := http.NewServeMux()
+
+	t.Run("enables TLS when certs provided", func(t *testing.T) {
+		cfg := Config{
+			HTTPAddr:    "127.0.0.1:0",
+			TLSCertPath: certPath,
+			TLSKeyPath:  keyPath,
+			RootCAPath:  certPath,
+		}
+
+		srv := &Server{}
+		if err := srv.setupHTTPServer(cfg, handler, ca); err != nil {
+			t.Fatalf("setupHTTPServer returned error: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = srv.httpSrv.Close()
+		})
+
+		if srv.httpSrv == nil {
+			t.Fatal("http server should be initialized")
+		}
+		if !srv.state.useTLS {
+			t.Error("expected TLS to be enabled")
+		}
+	})
+
+	t.Run("disables TLS when certs missing", func(t *testing.T) {
+		cfg := Config{
+			HTTPAddr: "127.0.0.1:0",
+		}
+
+		srv := &Server{}
+		if err := srv.setupHTTPServer(cfg, handler, ca); err != nil {
+			t.Fatalf("setupHTTPServer returned error: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = srv.httpSrv.Close()
+		})
+
+		if srv.state.useTLS {
+			t.Error("expected TLS to remain disabled")
+		}
+	})
 }
 
 // TestServer_validateTailscaleAccess tests Tailscale network validation

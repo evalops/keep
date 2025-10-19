@@ -1,6 +1,26 @@
 PROJECT_NAME := keep
+VENV ?= .venv
+VENV_BIN := $(VENV)/bin
+PYTHON_BIN := python3
+PIP_BIN := pip
+FLAKE8_CMD := $(PYTHON_BIN) -m flake8
+MYPY_CMD := $(PYTHON_BIN) -m mypy
+BLACK_CMD := $(PYTHON_BIN) -m black
+ISORT_CMD := $(PYTHON_BIN) -m isort
+PYTEST_CMD := $(PYTHON_BIN) -m pytest
+GOLANGCI_LINT ?= golangci-lint
 
-.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh
+ifneq ($(wildcard $(VENV_BIN)/python3),)
+PYTHON_BIN := $(VENV_BIN)/python3
+PIP_BIN := $(VENV_BIN)/pip
+FLAKE8_BIN := $(VENV_BIN)/flake8
+MYPY_BIN := $(VENV_BIN)/mypy
+BLACK_BIN := $(VENV_BIN)/black
+ISORT_BIN := $(VENV_BIN)/isort
+PYTEST_CMD := $(PYTHON_BIN) -m pytest
+endif
+
+.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv
 
 all: build
 
@@ -12,7 +32,7 @@ build:
 
 test:
 	go test ./...
-	python3 -m pytest
+	$(PYTEST_CMD)
 
 smoke:
 	COMPOSE_FILE=docker-compose.yml ./scripts/smoke-tests.sh
@@ -27,8 +47,8 @@ format-go:
 
 format-python:
 	@echo "Formatting Python code..."
-	black app/
-	isort app/
+	$(BLACK_CMD) app/
+	$(ISORT_CMD) app/
 
 # Linting targets  
 lint: lint-go lint-python
@@ -36,12 +56,12 @@ lint: lint-go lint-python
 lint-go:
 	@echo "Linting Go code..."
 	go mod download
-	golangci-lint run
+	$(GOLANGCI_LINT) run
 
 lint-python:
 	@echo "Linting Python code..."
-	flake8 app/
-	mypy app/ --ignore-missing-imports
+	$(FLAKE8_CMD) app/
+	$(MYPY_CMD) app/ --ignore-missing-imports
 
 docker-up:
 	docker compose up --build -d
@@ -74,7 +94,12 @@ install-tools:
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	@echo "Installing Python tools..."
-	pip install black flake8 isort mypy
+	$(PIP_BIN) install black flake8 isort mypy
+
+setup-venv:
+	python3 -m venv $(VENV)
+	$(VENV_BIN)/python3 -m pip install --upgrade pip
+	$(VENV_BIN)/pip install -r app/requirements.txt
 dev-bootstrap:
 	./scripts/dev-bootstrap.sh
 
@@ -83,10 +108,10 @@ check-tools:
 	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Run 'make install-tools'"; exit 1; }
 	@command -v goimports >/dev/null 2>&1 || { echo "goimports not found. Run 'make install-tools'"; exit 1; }
 	@echo "Checking Python tools..."
-	@command -v black >/dev/null 2>&1 || { echo "black not found. Run 'make install-tools'"; exit 1; }
-	@command -v flake8 >/dev/null 2>&1 || { echo "flake8 not found. Run 'make install-tools'"; exit 1; }
-	@command -v isort >/dev/null 2>&1 || { echo "isort not found. Run 'make install-tools'"; exit 1; }
-	@command -v mypy >/dev/null 2>&1 || { echo "mypy not found. Run 'make install-tools'"; exit 1; }
+	@$(BLACK_CMD) --version >/dev/null 2>&1 || { echo "black not available. Run 'make install-tools'"; exit 1; }
+	@$(FLAKE8_CMD) --version >/dev/null 2>&1 || { echo "flake8 not available. Run 'make install-tools'"; exit 1; }
+	@$(ISORT_CMD) --version >/dev/null 2>&1 || { echo "isort not available. Run 'make install-tools'"; exit 1; }
+	@$(MYPY_CMD) --version >/dev/null 2>&1 || { echo "mypy not available. Run 'make install-tools'"; exit 1; }
 	@echo "All tools are available!"
 
 # CI/CD targets
