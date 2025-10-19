@@ -18,20 +18,21 @@ import (
 )
 
 const (
-	defaultCAValidity     = 10 * 365 * 24 * time.Hour
-	defaultCertificateTTL = 8 * time.Hour
-	defaultClockSkew      = 5 * time.Minute
-	permOwnerReadWrite    = 0o600
-	permOwnerReadExecute  = 0o750
-	permOwnerReadGroup    = 0o640
-	maxSerialShift        = 128
-	initialCapacity       = 0
-	bigIntOne             = 1
-	
+	defaultCAValidity                   = 10 * 365 * 24 * time.Hour
+	defaultCertificateTTL               = 8 * time.Hour
+	defaultClockSkew                    = 5 * time.Minute
+	permOwnerReadWrite                  = 0o600
+	permOwnerReadExecute                = 0o750
+	permOwnerReadGroup                  = 0o640
+	maxSerialShift                      = 128
+	initialCapacity                     = 0
+	bigIntOne                           = 1
+	zeroDuration          time.Duration = 0
+
 	// Error messages
-	errParseCACert        = "failed to parse CA certificate PEM"
-	errParseCAKey         = "failed to parse CA key PEM"  
-	errUnexpectedKeyType  = "unexpected CA private key type"
+	errParseCACert       = "failed to parse CA certificate PEM"
+	errParseCAKey        = "failed to parse CA key PEM"
+	errUnexpectedKeyType = "unexpected CA private key type"
 )
 
 // validatePath ensures the path is safe from directory traversal attacks
@@ -63,7 +64,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 	if err := validatePath(keyPath); err != nil {
 		return nil, fmt.Errorf("invalid key path: %w", err)
 	}
-	
+
 	if err := os.MkdirAll(filepath.Dir(certPath), permOwnerReadExecute); err != nil {
 		return nil, fmt.Errorf("failed to create certificate directory: %w", err)
 	}
@@ -75,7 +76,7 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return LoadCA(certPath, keyPath)
 	}
 
-	if validFor == 0 {
+	if validFor == zeroDuration {
 		validFor = defaultCAValidity
 	}
 
@@ -109,20 +110,20 @@ func LoadOrCreateCA(certPath, keyPath, commonName string, validFor time.Duration
 		return nil, err
 	}
 
-	if err := writeFileSecure(certPath, permOwnerReadGroup, func(f *os.File) error {
+	if writeErr := writeFileSecure(certPath, permOwnerReadGroup, func(f *os.File) error {
 		return pem.Encode(f, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	}); err != nil {
-		return nil, err
+	}); writeErr != nil {
+		return nil, writeErr
 	}
 
 	encoded, err := x509.MarshalPKCS8PrivateKey(priv)
 	if err != nil {
 		return nil, err
 	}
-	if err := writeFileSecure(keyPath, permOwnerReadWrite, func(f *os.File) error {
+	if writeErr := writeFileSecure(keyPath, permOwnerReadWrite, func(f *os.File) error {
 		return pem.Encode(f, &pem.Block{Type: "PRIVATE KEY", Bytes: encoded})
-	}); err != nil {
-		return nil, err
+	}); writeErr != nil {
+		return nil, writeErr
 	}
 
 	return LoadCA(certPath, keyPath)
@@ -193,7 +194,7 @@ func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error
 }
 
 func (c *CertificateAuthority) IssueCertificate(subject pkix.Name, uris []string, dnsNames []string, ttl time.Duration, publicKey any) ([]byte, error) {
-	if ttl == 0 {
+	if ttl == zeroDuration {
 		ttl = defaultCertificateTTL
 	}
 
@@ -211,18 +212,18 @@ func (c *CertificateAuthority) IssueCertificate(subject pkix.Name, uris []string
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 	}
 
-	if len(dnsNames) > 0 {
+	if len(dnsNames) > initialCapacity {
 		tpl.DNSNames = dnsNames
 	}
 
-	if len(uris) > 0 {
-		parsed := make([]*url.URL, 0, len(uris))
+	if len(uris) > initialCapacity {
+		parsed := make([]*url.URL, initialCapacity, len(uris))
 		for _, raw := range uris {
-			u, err := url.Parse(raw)
-			if err != nil {
-				return nil, err
+			parsedURL, parseErr := url.Parse(raw)
+			if parseErr != nil {
+				return nil, parseErr
 			}
-			parsed = append(parsed, u)
+			parsed = append(parsed, parsedURL)
 		}
 		tpl.URIs = parsed
 	}
@@ -240,7 +241,7 @@ func (c *CertificateAuthority) SignCSR(csr *x509.CertificateRequest, ttl time.Du
 	if err := csr.CheckSignature(); err != nil {
 		return nil, err
 	}
-	if ttl == 0 {
+	if ttl == zeroDuration {
 		ttl = defaultCertificateTTL
 	}
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(bigIntOne), maxSerialShift))

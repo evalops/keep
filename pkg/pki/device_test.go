@@ -17,8 +17,6 @@ const (
 	testKeyName        = "test.key"
 	benchKeyName       = "bench.key"
 	msgGenerateKeyFail = "Failed to generate key: %v"
-	testDeviceCN       = "test-device"
-	testCAName         = "test-ca"
 )
 
 func TestGenerateSigningKey(t *testing.T) {

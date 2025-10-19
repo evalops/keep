@@ -19,6 +19,7 @@ const (
 	defaultCertPerm      = 0o600
 	dirPermissions       = 0o700
 	dirPermissionsSecure = 0o750
+	errAbsPathFmt        = "failed to get absolute path: %w"
 )
 
 // GenerateSigningKey creates a new P256 ECDSA key and writes it to the provided path in PEM (PKCS8) format.
@@ -26,7 +27,7 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 	if err := validatePath(path); err != nil {
 		return nil, fmt.Errorf("invalid key path: %w", err)
 	}
-	
+
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate signing key: %w", err)
@@ -34,11 +35,11 @@ func GenerateSigningKey(path string) (*ecdsa.PrivateKey, error) {
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+		return nil, fmt.Errorf(errAbsPathFmt, err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(absPath), dirPermissions); err != nil {
-		return nil, err
+	if mkErr := os.MkdirAll(filepath.Dir(absPath), dirPermissions); mkErr != nil {
+		return nil, mkErr
 	}
 
 	der, err := x509.MarshalPKCS8PrivateKey(priv)
@@ -70,10 +71,10 @@ func LoadSigningKey(path string) (*ecdsa.PrivateKey, error) {
 	if err := validatePath(path); err != nil {
 		return nil, fmt.Errorf("invalid key path: %w", err)
 	}
-	
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+		return nil, fmt.Errorf(errAbsPathFmt, err)
 	}
 
 	root, fileName, err := openFileRoot(absPath)
@@ -143,14 +144,14 @@ func WriteCertificate(path string, pemData []byte) error {
 	if err := validatePath(path); err != nil {
 		return fmt.Errorf("invalid certificate path: %w", err)
 	}
-	
+
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
+		return fmt.Errorf(errAbsPathFmt, err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(absPath), dirPermissionsSecure); err != nil {
-		return err
+	if mkErr := os.MkdirAll(filepath.Dir(absPath), dirPermissionsSecure); mkErr != nil {
+		return mkErr
 	}
 
 	root, fileName, err := openFileRoot(absPath)

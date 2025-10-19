@@ -13,11 +13,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	// Register pgx driver for database/sql usage
-	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" // register pgx driver with database/sql
+
+	"github.com/EvalOps/keep/pkg/telemetry"
 )
 
 const (
@@ -73,34 +73,7 @@ func NewServer(cfg Config) (*Server, error) {
 	// go run ./cmd/migrate -direction=up
 
 	s := &Server{cfg: cfg, db: db}
-
-	// Create chi router with middleware
-	r := chi.NewRouter()
-	telemetry.InstrumentRouter(r, "inventory")
-
-	// Add middleware
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(middlewareTimeout))
-
-	// Health endpoint (no auth required)
-	r.Get("/health", s.health)
-
-	// API routes with optional mTLS authentication
-	r.Route("/v1", func(r chi.Router) {
-		if cfg.ClientCA != "" {
-			r.Use(s.requireClientCertMiddleware)
-		}
-
-		r.Route("/devices", func(r chi.Router) {
-			r.Get("/", s.listDevices)
-			r.Post("/", s.registerDevice)
-			r.Get("/{deviceID}", s.deviceDetails)
-			r.Put("/{deviceID}", s.updateDevice)
-			r.Post("/{deviceID}/posture", s.updateDevicePosture)
-		})
-	})
+	r := s.setupRouter()
 
 	s.http = &http.Server{
 		Addr:              cfg.Addr,
@@ -208,6 +181,40 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// setupRouter configures the HTTP routes and shared middleware stack
+func (s *Server) setupRouter() chi.Router {
+	r := chi.NewRouter()
+	telemetry.InstrumentRouter(r, "inventory")
+
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(middlewareTimeout))
+
+	r.Get("/health", s.health)
+
+	registerDeviceRoutes := func(r chi.Router) {
+		r.Get("/", s.listDevices)
+		r.Post("/", s.registerDevice)
+		r.Route("/{deviceID}", func(r chi.Router) {
+			r.Get("/", s.deviceDetails)
+			r.Put("/", s.updateDevice)
+			r.Post("/posture", s.updateDevicePosture)
+		})
+	}
+
+	if s.cfg.ClientCA != emptyString {
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireClientCertMiddleware)
+			r.Route("/v1/devices", registerDeviceRoutes)
+		})
+	} else {
+		r.Route("/v1/devices", registerDeviceRoutes)
+	}
+
+	return r
 }
 
 func (*Server) health(w http.ResponseWriter, _ *http.Request) {

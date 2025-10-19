@@ -18,17 +18,24 @@ const (
 	testCAName    = "test-ca"
 	testCADefault = "test-ca-default"
 
-	testDeviceCN   = "test-device"
-	testDeviceOrg  = "test-org"
-	testDeviceURI  = "spiffe://example.com/device/123"
-	testDeviceDNS  = "device.example.com"
-	testDeviceTTLH = time.Hour
+	testDeviceCN         = "test-device"
+	testDeviceOrg        = "test-org"
+	testDeviceURI        = "spiffe://example.com/device/123"
+	testDeviceDNS        = "device.example.com"
+	testDeviceTTLH       = time.Hour
+	testCACertFilename   = "ca.pem"
+	testCAKeyFilename    = "ca-key.pem"
+	benchCACertFilename  = "bench-ca.pem"
+	benchCAKeyFilename   = "bench-ca-key.pem"
+	msgFailedCreateCA    = "Failed to create CA: %v"
+	msgFailedGenerateKey = "Failed to generate key: %v"
+	benchmarkNextOffset  = 1
 )
 
 func TestLoadOrCreateCA(t *testing.T) {
 	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "ca.pem")
-	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+	certPath := filepath.Join(tmpDir, testCACertFilename)
+	keyPath := filepath.Join(tmpDir, testCAKeyFilename)
 
 	t.Run("creates new CA when files don't exist", func(t *testing.T) {
 		ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24*365)
@@ -71,8 +78,8 @@ func TestLoadOrCreateCA(t *testing.T) {
 
 	t.Run("uses default validity period when zero", func(t *testing.T) {
 		tmpDir2 := t.TempDir()
-		certPath2 := filepath.Join(tmpDir2, "ca.pem")
-		keyPath2 := filepath.Join(tmpDir2, "ca-key.pem")
+		certPath2 := filepath.Join(tmpDir2, testCACertFilename)
+		keyPath2 := filepath.Join(tmpDir2, testCAKeyFilename)
 
 		ca, err := LoadOrCreateCA(certPath2, keyPath2, testCADefault, 0)
 		if err != nil {
@@ -95,11 +102,11 @@ func TestLoadCA(t *testing.T) {
 		keyPath := filepath.Join(tmpDir, "key.pem")
 
 		// Write invalid certificate
-		if err := os.WriteFile(certPath, []byte("invalid pem"), defaultCertPerm); err != nil {
-			t.Fatalf("failed to write invalid certificate: %v", err)
+		if writeErr := os.WriteFile(certPath, []byte("invalid pem"), defaultCertPerm); writeErr != nil {
+			t.Fatalf("failed to write invalid certificate: %v", writeErr)
 		}
-		if err := os.WriteFile(keyPath, []byte("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg\n-----END PRIVATE KEY-----"), defaultKeyPerm); err != nil {
-			t.Fatalf("failed to write invalid key: %v", err)
+		if writeErr := os.WriteFile(keyPath, []byte("-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg\n-----END PRIVATE KEY-----"), defaultKeyPerm); writeErr != nil {
+			t.Fatalf("failed to write invalid key: %v", writeErr)
 		}
 
 		_, err := LoadCA(certPath, keyPath)
@@ -123,8 +130,8 @@ func TestLoadCA(t *testing.T) {
 		}
 
 		// Now corrupt the key file
-		if err := os.WriteFile(keyPath, []byte("invalid key pem"), defaultKeyPerm); err != nil {
-			t.Fatalf("failed to corrupt key file: %v", err)
+		if writeErr := os.WriteFile(keyPath, []byte("invalid key pem"), defaultKeyPerm); writeErr != nil {
+			t.Fatalf("failed to corrupt key file: %v", writeErr)
 		}
 
 		_, err = LoadCA(certPath, keyPath)
@@ -148,8 +155,8 @@ func TestLoadCA(t *testing.T) {
 		}
 
 		// Remove key file
-		if err := os.Remove(keyPath); err != nil {
-			t.Fatalf("failed to remove key file: %v", err)
+		if removeErr := os.Remove(keyPath); removeErr != nil {
+			t.Fatalf("failed to remove key file: %v", removeErr)
 		}
 
 		_, err = LoadCA(certPath, keyPath)
@@ -161,18 +168,18 @@ func TestLoadCA(t *testing.T) {
 
 func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "ca.pem")
-	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+	certPath := filepath.Join(tmpDir, testCACertFilename)
+	keyPath := filepath.Join(tmpDir, testCAKeyFilename)
 
 	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, 24*time.Hour)
 	if err != nil {
-		t.Fatalf("Failed to create CA: %v", err)
+		t.Fatalf(msgFailedCreateCA, err)
 	}
 
 	// Generate a key for the certificate
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		t.Fatalf("Failed to generate key: %v", err)
+		t.Fatalf(msgFailedGenerateKey, err)
 	}
 
 	t.Run("issues valid certificate", func(t *testing.T) {
@@ -232,6 +239,9 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 		}
 
 		block, _ := pem.Decode(certPEM)
+		if block == nil {
+			t.Fatal("Failed to decode certificate PEM")
+		}
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			t.Fatalf("Failed to parse certificate: %v", err)
@@ -257,18 +267,18 @@ func TestCertificateAuthority_IssueCertificate(t *testing.T) {
 
 func TestCertificateAuthority_SignCSR(t *testing.T) {
 	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "ca.pem")
-	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+	certPath := filepath.Join(tmpDir, testCACertFilename)
+	keyPath := filepath.Join(tmpDir, testCAKeyFilename)
 
 	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, 24*time.Hour)
 	if err != nil {
-		t.Fatalf("Failed to create CA: %v", err)
+		t.Fatalf(msgFailedCreateCA, err)
 	}
 
 	// Generate a key and CSR
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		t.Fatalf("Failed to generate key: %v", err)
+		t.Fatalf(msgFailedGenerateKey, err)
 	}
 
 	t.Run("signs valid CSR", func(t *testing.T) {
@@ -298,6 +308,9 @@ func TestCertificateAuthority_SignCSR(t *testing.T) {
 
 		// Parse and verify the certificate
 		block, _ := pem.Decode(certPEM)
+		if block == nil {
+			t.Fatal("Failed to decode certificate PEM")
+		}
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			t.Fatalf("Failed to parse certificate: %v", err)
@@ -385,12 +398,12 @@ func TestCertificateAuthority_SignCSR(t *testing.T) {
 
 func TestCertificateAuthority_CertificatePEM(t *testing.T) {
 	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "ca.pem")
-	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+	certPath := filepath.Join(tmpDir, testCACertFilename)
+	keyPath := filepath.Join(tmpDir, testCAKeyFilename)
 
 	ca, err := LoadOrCreateCA(certPath, keyPath, testCAName, time.Hour*24)
 	if err != nil {
-		t.Fatalf("Failed to create CA: %v", err)
+		t.Fatalf(msgFailedCreateCA, err)
 	}
 
 	t.Run("returns valid PEM data", func(t *testing.T) {
@@ -402,7 +415,7 @@ func TestCertificateAuthority_CertificatePEM(t *testing.T) {
 		// Verify it's valid PEM
 		block, _ := pem.Decode(pemData)
 		if block == nil {
-			t.Error("Failed to decode PEM data")
+			t.Fatalf("Failed to decode PEM data")
 		}
 
 		if block.Type != "CERTIFICATE" {
@@ -426,9 +439,9 @@ func BenchmarkLoadOrCreateCA(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		certPath := filepath.Join(tmpDir, "bench-ca.pem")
-		keyPath := filepath.Join(tmpDir, "bench-ca-key.pem")
+	for i := initialCapacity; i < b.N; i++ {
+		certPath := filepath.Join(tmpDir, benchCACertFilename)
+		keyPath := filepath.Join(tmpDir, benchCAKeyFilename)
 
 		_, err := LoadOrCreateCA(certPath, keyPath, "bench-ca", time.Hour*24)
 		if err != nil {
@@ -436,7 +449,7 @@ func BenchmarkLoadOrCreateCA(b *testing.B) {
 		}
 
 		// Clean up for next iteration (except last)
-		if i < b.N-1 {
+		if i < b.N-benchmarkNextOffset {
 			os.Remove(certPath)
 			os.Remove(keyPath)
 		}
@@ -445,23 +458,23 @@ func BenchmarkLoadOrCreateCA(b *testing.B) {
 
 func BenchmarkIssueCertificate(b *testing.B) {
 	tmpDir := b.TempDir()
-	certPath := filepath.Join(tmpDir, "ca.pem")
-	keyPath := filepath.Join(tmpDir, "ca-key.pem")
+	certPath := filepath.Join(tmpDir, testCACertFilename)
+	keyPath := filepath.Join(tmpDir, testCAKeyFilename)
 
 	ca, err := LoadOrCreateCA(certPath, keyPath, "bench-ca", time.Hour*24)
 	if err != nil {
-		b.Fatalf("Failed to create CA: %v", err)
+		b.Fatalf(msgFailedCreateCA, err)
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		b.Fatalf("Failed to generate key: %v", err)
+		b.Fatalf(msgFailedGenerateKey, err)
 	}
 
 	subject := pkix.Name{CommonName: "bench-device"}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := initialCapacity; i < b.N; i++ {
 		_, err := ca.IssueCertificate(subject, nil, nil, time.Hour, &priv.PublicKey)
 		if err != nil {
 			b.Fatalf("IssueCertificate failed: %v", err)
