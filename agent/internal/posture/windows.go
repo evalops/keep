@@ -11,6 +11,22 @@ const (
 	displayNamePrefixLen = len(displayNamePrefix)
 	powershellCmd        = "powershell"
 	powershellFlag       = "-Command"
+	
+	// OS constants
+	windowsOSName = "Windows"
+	
+	// Service names
+	windowsDefenderFirewall = "Windows Defender Firewall"
+	
+	// Command keywords and patterns
+	firewallStateOn     = "state                                 on"
+	antivirusEnabled    = "true"
+	protectionOn        = "protection on"
+	fullyEncrypted      = "fully encrypted"
+	minPasswordLength   = "minimum password length"
+	
+	// Rule prefix for firewall rule counting
+	ruleNamePrefix = "Rule Name:"
 )
 
 // WindowsCollector collects device posture on Windows systems
@@ -20,7 +36,7 @@ type WindowsCollector struct{}
 func (c *WindowsCollector) CollectPosture() (*DevicePosture, error) {
 	posture := &DevicePosture{
 		OS: OperatingSystem{
-			Name: "Windows",
+			Name: windowsOSName,
 			Arch: runtime.GOARCH,
 		},
 	}
@@ -83,7 +99,7 @@ func (c *WindowsCollector) collectOSInfo(os *OperatingSystem) error {
 
 // collectFirewallStatus checks Windows Defender Firewall status
 func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
-	fw.Service = "Windows Defender Firewall"
+	fw.Service = windowsDefenderFirewall
 
 	// Check firewall state using netsh
 	output, err := runCommand("netsh", "advfirewall", "show", "allprofiles", "state")
@@ -92,7 +108,7 @@ func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 	}
 
 	// Check if any profile is enabled
-	fw.Enabled = strings.Contains(strings.ToLower(output), "state                                 on")
+	fw.Enabled = strings.Contains(strings.ToLower(output), firewallStateOn)
 
 	// Count rules (simplified)
 	if fw.Enabled {
@@ -101,7 +117,7 @@ func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 			lines := strings.Split(ruleOutput, newlineSeparator)
 			ruleCount := initialCapacity
 			for _, line := range lines {
-				if strings.HasPrefix(strings.TrimSpace(line), RuleNamePrefix) {
+				if strings.HasPrefix(strings.TrimSpace(line), ruleNamePrefix) {
 					ruleCount++
 				}
 			}
@@ -116,7 +132,7 @@ func (_ *WindowsCollector) collectFirewallStatus(fw *FirewallStatus) error {
 func (_ *WindowsCollector) checkAntiVirus() bool {
 	// Check Windows Defender status
 	output, err := runCommand(powershellCmd, powershellFlag, "Get-MpComputerStatus | Select-Object AntivirusEnabled")
-	if err == nil && strings.Contains(strings.ToLower(output), "true") {
+	if err == nil && strings.Contains(strings.ToLower(output), antivirusEnabled) {
 		return true
 	}
 
@@ -163,8 +179,8 @@ func (_ *WindowsCollector) checkDiskEncryption() bool {
 	}
 
 	lowerOutput := strings.ToLower(output)
-	return strings.Contains(lowerOutput, "protection on") ||
-		strings.Contains(lowerOutput, "fully encrypted")
+	return strings.Contains(lowerOutput, protectionOn) ||
+		strings.Contains(lowerOutput, fullyEncrypted)
 }
 
 // checkScreenLock checks screen lock/password policy
@@ -182,7 +198,7 @@ func (_ *WindowsCollector) checkScreenLock() bool {
 	if err == nil {
 		lines := strings.Split(output, "\n")
 		for _, line := range lines {
-			if strings.Contains(strings.ToLower(line), "minimum password length") {
+			if strings.Contains(strings.ToLower(line), minPasswordLength) {
 				if strings.Contains(line, "0") {
 					return false // No password required
 				}
