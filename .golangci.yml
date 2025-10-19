@@ -3,7 +3,6 @@ run:
   issues-exit-code: 1
   tests: true
   build-tags: []
-  modules-download-mode: vendor
 
 linters-settings:
   errcheck:
@@ -139,9 +138,10 @@ issues:
       text: "Error return value of.*not checked"
 
 output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
+  formats:
+    - format: colored-line-number
+      print-issued-lines: true
+      print-linter-name: true
 
 severity:
   default-severity: error
