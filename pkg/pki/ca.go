@@ -32,12 +32,12 @@ func validatePath(path string) error {
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("path is empty")
 	}
-	
+
 	cleaned := filepath.Clean(path)
 	if strings.Contains(cleaned, "..") {
 		return fmt.Errorf("path contains directory traversal: %s", path)
 	}
-	
+
 	return nil
 }
 
@@ -121,7 +121,7 @@ func LoadCA(certPath, keyPath string) (*CertificateAuthority, error) {
 	if err := validatePath(keyPath); err != nil {
 		return nil, fmt.Errorf("invalid key path: %w", err)
 	}
-	
+
 	// Paths are validated above - G304 is false positive
 	certPEM, err := os.ReadFile(certPath) // #nosec G304
 	if err != nil {
@@ -162,7 +162,7 @@ func writeFileSecure(path string, perm os.FileMode, writeFn func(*os.File) error
 	if err := validatePath(path); err != nil {
 		return fmt.Errorf("invalid file path: %w", err)
 	}
-	
+
 	if err := os.MkdirAll(filepath.Dir(path), permOwnerReadExecute); err != nil {
 		return err
 	}

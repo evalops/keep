@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	jwtPartCount       = 3
-	bitShift           = 8
-	initialCapacity    = 0
-	indexIncrement     = 1
+	jwtPartCount    = 3
+	bitShift        = 8
+	initialCapacity = 0
+	indexIncrement  = 1
 )
 
 type googleKey struct {

@@ -181,7 +181,7 @@ func (c *LinuxCollector) checkSystemUpdated() bool {
 		// Exit code 0 means no updates, 100 means updates available
 		return true
 	}
-	
+
 	return strings.TrimSpace(output) == ""
 }
 
