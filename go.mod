@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssm v1.66.0
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/go-chi/chi/v5 v5.2.3
-	github.com/golang-migrate/migrate/v4 v4.17.1
+	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/hashicorp/vault/api v1.22.0
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/prometheus/client_golang v1.23.2
@@ -127,7 +127,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.38.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13 // indirect
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba // indirect
