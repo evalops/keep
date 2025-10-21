@@ -3,6 +3,25 @@ package server
 import "time"
 
 type Config struct {
+	// time.Duration fields first (8 bytes each)
+	VouchTimeout    time.Duration
+	VouchCacheTTL   time.Duration
+	DeviceCertHours time.Duration
+	RequestTimeout  time.Duration
+	RetryMaxElapsed time.Duration
+
+	// int fields next (4/8 bytes each)
+	VouchMaxEntries    int
+	VouchRetryAttempts int
+	RetryMaxAttempts   int
+
+	// bool fields (1 byte each)
+	VouchEnabled        bool
+	VouchRetryEnabled   bool
+	VouchCircuitBreaker bool
+	TelemetryInsecure   bool
+
+	// string fields last (pointers - 8 bytes each + variable size)
 	HTTPAddr            string
 	GRPCAddr            string
 	TLSCertPath         string
@@ -14,18 +33,8 @@ type Config struct {
 	InventoryClientCert string // Client certificate for mTLS to inventory service
 	InventoryClientKey  string // Client private key for mTLS to inventory service
 	InventoryCA         string // CA certificate for inventory service validation
-
-	// Vouch integration config
-	VouchEnabled        bool
 	VouchBaseURL        string
 	VouchAPIKey         string
-	VouchTimeout        time.Duration
-	VouchCacheTTL       time.Duration
-	VouchMaxEntries     int
-	VouchRetryEnabled   bool
-	VouchRetryAttempts  int
-	VouchCircuitBreaker bool
-
 	TailscaleAuthKey    string
 	TailscaleHostname   string
 	TailscaleListenAddr string
@@ -34,9 +43,4 @@ type Config struct {
 	MFAServiceURL       string
 	TelemetryEndpoint   string
 	TelemetryEnv        string
-	DeviceCertHours     time.Duration
-	RequestTimeout      time.Duration
-	RetryMaxElapsed     time.Duration
-	RetryMaxAttempts    int
-	TelemetryInsecure   bool
 }

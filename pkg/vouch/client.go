@@ -30,6 +30,7 @@ const (
 	apiVersion                   = "v1"
 	deviceEndpoint               = "devices"
 	formatKeep                   = "keep"
+	zeroFailures                 = 0
 )
 
 // Error types for Vouch client operations
@@ -45,8 +46,8 @@ var (
 // DevicePosture represents device posture information from Vouch
 type DevicePosture struct {
 	Attributes map[string]interface{} `json:"attributes"`
-	Compliance ComplianceStatus       `json:"compliance"`
 	LastSeen   time.Time              `json:"last_seen"`
+	Compliance ComplianceStatus       `json:"compliance"`
 	ID         string                 `json:"id"`
 	Hostname   string                 `json:"hostname"`
 	NodeID     string                 `json:"node_id"`
@@ -97,19 +98,19 @@ type Client struct {
 // NewClient creates a new Vouch client
 func NewClient(config Config) (*Client, error) {
 	// Set defaults
-	if config.Timeout == 0 {
+	if config.Timeout == zeroFailures {
 		config.Timeout = defaultTimeout
 	}
-	if config.CacheTTL == 0 {
+	if config.CacheTTL == zeroFailures {
 		config.CacheTTL = defaultCacheTTL
 	}
-	if config.MaxEntries == 0 {
+	if config.MaxEntries == zeroFailures {
 		config.MaxEntries = defaultMaxEntries
 	}
-	if config.CircuitBreaker.FailureThreshold == 0 {
+	if config.CircuitBreaker.FailureThreshold == zeroFailures {
 		config.CircuitBreaker.FailureThreshold = defaultFailureThreshold
 	}
-	if config.CircuitBreaker.TimeoutSeconds == 0 {
+	if config.CircuitBreaker.TimeoutSeconds == zeroFailures {
 		config.CircuitBreaker.TimeoutSeconds = defaultCircuitBreakerTimeout
 	}
 
@@ -431,6 +432,6 @@ func (cb *CircuitBreaker) RecordSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	cb.failures = 0
+	cb.failures = zeroFailures
 	cb.state = StateClosed
 }

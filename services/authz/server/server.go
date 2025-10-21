@@ -18,6 +18,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"tailscale.com/tsnet"
+
 	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/metrics"
 	"github.com/EvalOps/keep/pkg/pki"
@@ -25,10 +30,6 @@ import (
 	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/EvalOps/keep/pkg/vouch"
 	"github.com/EvalOps/keep/services/authz/token"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"tailscale.com/tsnet"
 )
 
 const (
@@ -47,6 +48,7 @@ const (
 	defaultVouchRetryAttempts  = 3
 	defaultVouchFailureThresh  = 5
 	defaultVouchCircuitTimeout = 30 * time.Second
+	zeroValue                  = 0
 	emptyString                = ""
 	contentTypeHeader          = "Content-Type"
 	applicationJSON            = "application/json"
@@ -766,13 +768,13 @@ func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 	}
 
 	// Set defaults if not specified
-	if vouchConfig.Timeout == 0 {
+	if vouchConfig.Timeout == zeroValue {
 		vouchConfig.Timeout = defaultVouchTimeout
 	}
-	if vouchConfig.CacheTTL == 0 {
+	if vouchConfig.CacheTTL == zeroValue {
 		vouchConfig.CacheTTL = defaultVouchCacheTTL
 	}
-	if vouchConfig.MaxEntries == 0 {
+	if vouchConfig.MaxEntries == zeroValue {
 		vouchConfig.MaxEntries = defaultVouchMaxEntries
 	}
 
@@ -784,7 +786,7 @@ func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 			Multiplier:      defaultRetryMultiplier,
 			MaxInterval:     defaultMaxInterval,
 		}
-		if vouchConfig.RetryConfig.MaxAttempts == 0 {
+		if vouchConfig.RetryConfig.MaxAttempts == zeroValue {
 			vouchConfig.RetryConfig.MaxAttempts = defaultVouchRetryAttempts
 		}
 	}
