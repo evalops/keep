@@ -46,8 +46,8 @@ var (
 // DevicePosture represents device posture information from Vouch
 type DevicePosture struct {
 	Attributes map[string]interface{} `json:"attributes"`
-	LastSeen   time.Time              `json:"last_seen"`
 	Compliance ComplianceStatus       `json:"compliance"`
+	LastSeen   time.Time              `json:"last_seen"`
 	ID         string                 `json:"id"`
 	Hostname   string                 `json:"hostname"`
 	NodeID     string                 `json:"node_id"`
