@@ -92,19 +92,19 @@ const (
 
 // Server implements the authorization service with OPA policy evaluation
 type Server struct {
-	cfg          *Config
-	retryCfg     *retry.Config
-	httpSrv      *http.Server
-	tsHTTP       *http.Server
-	client       *http.Client
-	invClient    *http.Client
-	vouchClient  vouch.DevicePostureClient
-	ca           *pki.CertificateAuthority
-	tsServer     *tsnet.Server
-	tsListener   net.Listener
-	rootCAPEM    []byte
-	mu           sync.Mutex
-	state        struct {
+	cfg         *Config
+	retryCfg    *retry.Config
+	httpSrv     *http.Server
+	tsHTTP      *http.Server
+	client      *http.Client
+	invClient   *http.Client
+	vouchClient vouch.DevicePostureClient
+	ca          *pki.CertificateAuthority
+	tsServer    *tsnet.Server
+	tsListener  net.Listener
+	rootCAPEM   []byte
+	mu          sync.Mutex
+	state       struct {
 		started bool
 		useTLS  bool
 	}
@@ -375,7 +375,7 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceID, clientIP string) (string, error) {
 	now := time.Now()
-	
+
 	body := map[string]any{
 		"input": map[string]any{
 			"user": map[string]any{
@@ -384,14 +384,14 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 			},
 			"device": s.lookupDevice(ctx, deviceID),
 			"request": map[string]any{
-				"path":   "/", // TODO: extract from context if needed
+				"path":   "/",   // TODO: extract from context if needed
 				"method": "GET", // TODO: extract from context if needed
 			},
 			"context": map[string]any{
-				"client_ip":      clientIP,
-				"time":           now,
-				"day_of_week":    strings.ToLower(now.Weekday().String()),
-				"hour_of_day":    now.Hour(),
+				"client_ip":   clientIP,
+				"time":        now,
+				"day_of_week": strings.ToLower(now.Weekday().String()),
+				"hour_of_day": now.Hour(),
 			},
 		},
 	}
@@ -514,14 +514,14 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 	if s.cfg.VouchEnabled && s.vouchClient != nil {
 		return s.lookupDeviceVouch(ctx, deviceID)
 	}
-	
+
 	return s.lookupDeviceInventory(ctx, deviceID)
 }
 
 func (s *Server) lookupDeviceVouch(ctx context.Context, deviceID string) map[string]any {
 	start := time.Now()
 	posture, err := s.vouchClient.GetPosture(ctx, deviceID)
-	
+
 	if err != nil {
 		// Map Vouch errors to appropriate status
 		var status string
@@ -541,29 +541,29 @@ func (s *Server) lookupDeviceVouch(ctx context.Context, deviceID string) map[str
 			status = statusUnknown
 			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusError)
 		}
-		
+
 		return map[string]any{
 			fieldID:         deviceID,
 			fieldPosture:    status,
 			fieldTrustScore: zeroTrustScore,
 		}
 	}
-	
+
 	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusOK)
-	
+
 	timeSinceLastSeen := time.Since(posture.LastSeen).Minutes()
-	
+
 	return map[string]any{
-		fieldID:                          posture.ID,
-		fieldPosture:                     posture.Posture,
-		fieldTrustScore:                  posture.TrustScore,
-		"hostname":                       posture.Hostname,
-		"node_id":                        posture.NodeID,
-		"last_seen":                      posture.LastSeen,
-		"time_since_last_seen_minutes":   timeSinceLastSeen,
-		"compliant":                      posture.Compliance.Compliant,
-		"violations":                     posture.Compliance.Violations,
-		"attributes":                     posture.Attributes,
+		fieldID:                        posture.ID,
+		fieldPosture:                   posture.Posture,
+		fieldTrustScore:                posture.TrustScore,
+		"hostname":                     posture.Hostname,
+		"node_id":                      posture.NodeID,
+		"last_seen":                    posture.LastSeen,
+		"time_since_last_seen_minutes": timeSinceLastSeen,
+		"compliant":                    posture.Compliance.Compliant,
+		"violations":                   posture.Compliance.Violations,
+		"attributes":                   posture.Attributes,
 	}
 }
 
@@ -752,13 +752,13 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 // configureVouchClient creates a Vouch client for device posture queries
 func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 	vouchConfig := vouch.Config{
-		BaseURL:     cfg.VouchBaseURL,
-		APIKey:      cfg.VouchAPIKey,
-		Timeout:     cfg.VouchTimeout,
-		CacheTTL:    cfg.VouchCacheTTL,
-		MaxEntries:  cfg.VouchMaxEntries,
+		BaseURL:    cfg.VouchBaseURL,
+		APIKey:     cfg.VouchAPIKey,
+		Timeout:    cfg.VouchTimeout,
+		CacheTTL:   cfg.VouchCacheTTL,
+		MaxEntries: cfg.VouchMaxEntries,
 	}
-	
+
 	// Set defaults if not specified
 	if vouchConfig.Timeout == 0 {
 		vouchConfig.Timeout = 5 * time.Second
@@ -769,7 +769,7 @@ func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 	if vouchConfig.MaxEntries == 0 {
 		vouchConfig.MaxEntries = 10000
 	}
-	
+
 	// Configure retry
 	if cfg.VouchRetryEnabled {
 		vouchConfig.RetryConfig = retry.Config{
@@ -782,19 +782,19 @@ func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 			vouchConfig.RetryConfig.MaxAttempts = 3
 		}
 	}
-	
+
 	// Configure circuit breaker
 	vouchConfig.CircuitBreaker.Enabled = cfg.VouchCircuitBreaker
 	if vouchConfig.CircuitBreaker.Enabled {
 		vouchConfig.CircuitBreaker.FailureThreshold = 5
 		vouchConfig.CircuitBreaker.TimeoutSeconds = 30 * time.Second
 	}
-	
+
 	client, err := vouch.NewClient(vouchConfig)
 	if err != nil {
 		return nil, fmt.Errorf("create vouch client: %w", err)
 	}
-	
+
 	return client, nil
 }
 

@@ -31,24 +31,24 @@ const (
 
 // Error types for Vouch client operations
 var (
-	ErrDeviceNotFound      = errors.New("device not found")
-	ErrDeviceDataStale     = errors.New("device data is stale")
-	ErrVouchUnavailable    = errors.New("vouch server unavailable")
-	ErrUnauthorized        = errors.New("unauthorized")
-	ErrRateLimited         = errors.New("rate limited")
-	ErrCircuitOpen         = errors.New("circuit breaker is open")
+	ErrDeviceNotFound   = errors.New("device not found")
+	ErrDeviceDataStale  = errors.New("device data is stale")
+	ErrVouchUnavailable = errors.New("vouch server unavailable")
+	ErrUnauthorized     = errors.New("unauthorized")
+	ErrRateLimited      = errors.New("rate limited")
+	ErrCircuitOpen      = errors.New("circuit breaker is open")
 )
 
 // DevicePosture represents device posture information from Vouch
 type DevicePosture struct {
-	ID           string                 `json:"id"`
-	Hostname     string                 `json:"hostname"`
-	NodeID       string                 `json:"node_id"`
-	Posture      string                 `json:"posture"`      // "healthy", "degraded", "unknown"
-	TrustScore   int                    `json:"trust_score"`  // 0-100
-	LastSeen     time.Time              `json:"last_seen"`
-	Attributes   map[string]interface{} `json:"attributes"`
-	Compliance   ComplianceStatus       `json:"compliance"`
+	ID         string                 `json:"id"`
+	Hostname   string                 `json:"hostname"`
+	NodeID     string                 `json:"node_id"`
+	Posture    string                 `json:"posture"`     // "healthy", "degraded", "unknown"
+	TrustScore int                    `json:"trust_score"` // 0-100
+	LastSeen   time.Time              `json:"last_seen"`
+	Attributes map[string]interface{} `json:"attributes"`
+	Compliance ComplianceStatus       `json:"compliance"`
 }
 
 // ComplianceStatus represents device compliance information
@@ -60,12 +60,12 @@ type ComplianceStatus struct {
 
 // Config holds configuration for the Vouch client
 type Config struct {
-	BaseURL       string        `yaml:"base_url"`
-	APIKey        string        `yaml:"api_key"`
-	Timeout       time.Duration `yaml:"timeout_seconds"`
-	CacheTTL      time.Duration `yaml:"cache_ttl_seconds"`
-	MaxEntries    int           `yaml:"max_entries"`
-	RetryConfig   retry.Config  `yaml:"retry"`
+	BaseURL        string               `yaml:"base_url"`
+	APIKey         string               `yaml:"api_key"`
+	Timeout        time.Duration        `yaml:"timeout_seconds"`
+	CacheTTL       time.Duration        `yaml:"cache_ttl_seconds"`
+	MaxEntries     int                  `yaml:"max_entries"`
+	RetryConfig    retry.Config         `yaml:"retry"`
 	CircuitBreaker CircuitBreakerConfig `yaml:"circuit_breaker"`
 }
 
@@ -115,7 +115,7 @@ func NewClient(config Config) (*Client, error) {
 	})
 
 	cache := NewCache(config.MaxEntries, config.CacheTTL)
-	
+
 	var cb *CircuitBreaker
 	if config.CircuitBreaker.Enabled {
 		cb = NewCircuitBreaker(config.CircuitBreaker.FailureThreshold, config.CircuitBreaker.TimeoutSeconds)
@@ -176,11 +176,11 @@ func (c *Client) GetPosture(ctx context.Context, deviceID string) (*DevicePostur
 
 // makeRequest performs the actual HTTP request to Vouch server
 func (c *Client) makeRequest(ctx context.Context, deviceID string) (*DevicePosture, error) {
-	url := fmt.Sprintf("%s/%s/%s/%s?format=%s", 
-		strings.TrimSuffix(c.config.BaseURL, "/"), 
-		apiVersion, 
-		deviceEndpoint, 
-		deviceID, 
+	url := fmt.Sprintf("%s/%s/%s/%s?format=%s",
+		strings.TrimSuffix(c.config.BaseURL, "/"),
+		apiVersion,
+		deviceEndpoint,
+		deviceID,
 		formatKeep)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -251,7 +251,7 @@ func (c *Client) makeRequest(ctx context.Context, deviceID string) (*DevicePostu
 // HealthCheck verifies connectivity to Vouch server
 func (c *Client) HealthCheck(ctx context.Context) error {
 	url := fmt.Sprintf("%s/health", strings.TrimSuffix(c.config.BaseURL, "/"))
-	
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("create health check request: %w", err)
@@ -382,7 +382,7 @@ func NewCircuitBreaker(failureThreshold int, timeout time.Duration) *CircuitBrea
 func (cb *CircuitBreaker) IsOpen() bool {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-	
+
 	if cb.state == StateOpen {
 		// Check if timeout has passed
 		if time.Since(cb.lastFailureTime) >= cb.timeout {
@@ -393,7 +393,7 @@ func (cb *CircuitBreaker) IsOpen() bool {
 			cb.mu.RLock()
 		}
 	}
-	
+
 	return cb.state == StateOpen
 }
 
