@@ -29,3 +29,5 @@
 - **Use proper names: `config.yaml` not `config-enhanced.yaml`**
 - **Commit and push changes regularly to git repositories**
 - **Update README files when adding major features**
+- **NO marketing hyperbole in technical documentation**
+- **Keep claims factual and modest, especially for PoC projects**

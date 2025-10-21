@@ -6,7 +6,7 @@
 > It is **NOT intended for production use** and may contain security vulnerabilities, incomplete features,
 > and other issues. Use at your own risk in development/testing environments only.
 
-This repository implements an end-to-end zero-trust access proxy with sophisticated device posture attestation. The stack integrates with [Vouch](https://github.com/haasonsaas/vouch) for production-grade device posture collection and provides more sophisticated security than most enterprise solutions.
+This repository implements an end-to-end zero-trust access proxy with device posture attestation. The stack integrates with [Vouch](https://github.com/haasonsaas/vouch) for device posture collection.
 
 ## Architecture Overview
 
