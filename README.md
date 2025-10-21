@@ -34,20 +34,20 @@ Google SSO (JWT + JWKS) -----> Authz Service (Go) -----> OPA (Policies)
 ## Key Components
 
 ### Core Services
-- **Envoy Proxy**: Fronts the application with enhanced device ID extraction, validates Google-issued ID tokens via the authz service, and establishes mTLS to the backend.
-- **Authz Service (Go)**: Verifies Google JWTs, queries **Vouch** for rich device posture, and consults OPA for authorization decisions with sophisticated policies.
-- **Vouch Integration**: Production-grade device posture attestation with 8+ security dimensions, trust score calculation, and continuous monitoring.
-- **OPA**: Enhanced policy bundles with role-based access control, time-based restrictions, and rich device context.
-- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access with OpenTelemetry instrumentation.
+- **Envoy Proxy**: Fronts the application, validates Google-issued ID tokens via the authz service, and establishes mTLS to the backend.
+- **Authz Service (Go)**: Verifies Google JWTs, queries Vouch for device posture, and consults OPA for authorization decisions.
+- **Vouch Integration**: Device posture attestation with trust score calculation and monitoring.
+- **OPA**: Policy engine with role-based access control and device context.
+- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access.
 
-### Enhanced Security Features
-- **Rich Device Context**: OS info, encryption status, firewall state, EDR health, update status, secure boot, TPM presence
-- **Trust Score Algorithm**: Sophisticated 0-100 scoring based on security posture deductions
+### Security Features
+- **Device Context**: OS info, encryption status, firewall state, EDR health, update status, secure boot, TPM presence
+- **Trust Score**: 0-100 scoring based on security posture
 - **Role-Based Policies**: Different requirements for admin, engineering, and contractor access
 - **Time-Based Controls**: Contractor access limited to business hours
-- **Step-Up MFA**: Required for devices with degraded trust scores
-- **Continuous Attestation**: 5-minute posture updates vs. point-in-time checks
-- **Cryptographic Identity**: Ed25519-signed device reports prevent spoofing
+- **Step-Up MFA**: Required for devices with lower trust scores
+- **Periodic Attestation**: 5-minute posture updates
+- **Signed Reports**: Ed25519-signed device reports
 
 ## Getting Started
 
@@ -197,9 +197,9 @@ services/inventory       # Inventory service implementation
 - No rate limiting, anomaly detection, or audit persistence beyond logs/traces.
 - Telemetry endpoint is assumed trusted; no auth/tenant isolation.
 
-## Enhanced Policy Examples
+## Policy Examples
 
-The stack now supports sophisticated policies leveraging rich device posture from Vouch:
+Policies can use device posture data from Vouch:
 
 ```rego
 package keep.authz
