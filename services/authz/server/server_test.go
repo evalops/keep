@@ -18,7 +18,7 @@ import (
 
 const (
 	testDeviceID           = "test-device"
-	testAllowPath          = "/v1/data/keep/allow"
+	testAllowPath          = "/v1/data/keep/authz/decision"
 	testClientRemoteIP     = "100.65.1.1:12345"
 	resultKey              = "result"
 	decisionKey            = "decision"
