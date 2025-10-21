@@ -3,25 +3,14 @@ package server
 import "time"
 
 type Config struct {
-	// time.Duration fields first (8 bytes each)
-	VouchTimeout    time.Duration
-	VouchCacheTTL   time.Duration
-	DeviceCertHours time.Duration
-	RequestTimeout  time.Duration
-	RetryMaxElapsed time.Duration
-
-	// int fields next (4/8 bytes each)
-	VouchMaxEntries    int
-	VouchRetryAttempts int
-	RetryMaxAttempts   int
-
-	// bool fields (1 byte each)
-	VouchEnabled        bool
-	VouchRetryEnabled   bool
-	VouchCircuitBreaker bool
-	TelemetryInsecure   bool
-
-	// string fields last (pointers - 8 bytes each + variable size)
+	InventoryClientCert string
+	InventoryClientKey  string
+	TelemetryEnv        string
+	TelemetryEndpoint   string
+	MFAServiceURL       string
+	TailscaleTailnet    string
+	TailscaleAPIKey     string
+	TailscaleListenAddr string
 	HTTPAddr            string
 	GRPCAddr            string
 	TLSCertPath         string
@@ -30,17 +19,21 @@ type Config struct {
 	GoogleClientID      string
 	OPAURL              string
 	InventoryAPI        string
-	InventoryClientCert string // Client certificate for mTLS to inventory service
-	InventoryClientKey  string // Client private key for mTLS to inventory service
-	InventoryCA         string // CA certificate for inventory service validation
+	TailscaleHostname   string
+	InventoryCA         string
+	TailscaleAuthKey    string
 	VouchBaseURL        string
 	VouchAPIKey         string
-	TailscaleAuthKey    string
-	TailscaleHostname   string
-	TailscaleListenAddr string
-	TailscaleAPIKey     string
-	TailscaleTailnet    string
-	MFAServiceURL       string
-	TelemetryEndpoint   string
-	TelemetryEnv        string
+	VouchTimeout        time.Duration
+	VouchCacheTTL       time.Duration
+	RetryMaxAttempts    int
+	VouchRetryAttempts  int
+	VouchMaxEntries     int
+	RetryMaxElapsed     time.Duration
+	RequestTimeout      time.Duration
+	DeviceCertHours     time.Duration
+	VouchEnabled        bool
+	VouchRetryEnabled   bool
+	VouchCircuitBreaker bool
+	TelemetryInsecure   bool
 }

@@ -45,14 +45,14 @@ var (
 
 // DevicePosture represents device posture information from Vouch
 type DevicePosture struct {
-	Attributes map[string]interface{} `json:"attributes"`
-	Compliance ComplianceStatus       `json:"compliance"`
 	LastSeen   time.Time              `json:"last_seen"`
+	Attributes map[string]interface{} `json:"attributes"`
 	ID         string                 `json:"id"`
 	Hostname   string                 `json:"hostname"`
 	NodeID     string                 `json:"node_id"`
-	Posture    string                 `json:"posture"`     // "healthy", "degraded", "unknown"
-	TrustScore int                    `json:"trust_score"` // 0-100
+	Posture    string                 `json:"posture"`
+	Compliance ComplianceStatus       `json:"compliance"`
+	TrustScore int                    `json:"trust_score"`
 }
 
 // ComplianceStatus represents device compliance information

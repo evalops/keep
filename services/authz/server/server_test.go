@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"tailscale.com/tsnet"
+
 	"github.com/EvalOps/keep/pkg/pki"
 	"github.com/EvalOps/keep/pkg/retry"
-	"tailscale.com/tsnet"
 )
 
 const (

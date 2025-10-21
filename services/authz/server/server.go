@@ -18,6 +18,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"tailscale.com/tsnet"
+
 	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/metrics"
 	"github.com/EvalOps/keep/pkg/pki"
@@ -25,10 +30,6 @@ import (
 	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/EvalOps/keep/pkg/vouch"
 	"github.com/EvalOps/keep/services/authz/token"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"tailscale.com/tsnet"
 )
 
 const (

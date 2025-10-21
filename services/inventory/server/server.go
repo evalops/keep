@@ -13,10 +13,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/jackc/pgx/v5/stdlib" // register pgx driver with database/sql
+
+	"github.com/EvalOps/keep/pkg/telemetry"
 )
 
 const (
