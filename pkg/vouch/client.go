@@ -15,18 +15,21 @@ import (
 )
 
 const (
-	defaultTimeout      = 5 * time.Second
-	defaultCacheTTL     = 5 * time.Minute
-	defaultMaxEntries   = 10000
-	httpTooManyRequests = 429
-	httpGone            = 410
-	httpNotFound        = 404
-	httpUnauthorized    = 401
-	httpInternalError   = 500
-	httpServiceUnavail  = 503
-	apiVersion          = "v1"
-	deviceEndpoint      = "devices"
-	formatKeep          = "keep"
+	defaultTimeout               = 5 * time.Second
+	defaultCacheTTL              = 5 * time.Minute
+	defaultMaxEntries            = 10000
+	defaultFailureThreshold      = 5
+	defaultCircuitBreakerTimeout = 30 * time.Second
+	defaultRetryAttempts         = 3
+	httpTooManyRequests          = 429
+	httpGone                     = 410
+	httpNotFound                 = 404
+	httpUnauthorized             = 401
+	httpInternalError            = 500
+	httpServiceUnavail           = 503
+	apiVersion                   = "v1"
+	deviceEndpoint               = "devices"
+	formatKeep                   = "keep"
 )
 
 // Error types for Vouch client operations
@@ -41,21 +44,21 @@ var (
 
 // DevicePosture represents device posture information from Vouch
 type DevicePosture struct {
+	Attributes map[string]interface{} `json:"attributes"`
+	Compliance ComplianceStatus       `json:"compliance"`
+	LastSeen   time.Time              `json:"last_seen"`
 	ID         string                 `json:"id"`
 	Hostname   string                 `json:"hostname"`
 	NodeID     string                 `json:"node_id"`
 	Posture    string                 `json:"posture"`     // "healthy", "degraded", "unknown"
 	TrustScore int                    `json:"trust_score"` // 0-100
-	LastSeen   time.Time              `json:"last_seen"`
-	Attributes map[string]interface{} `json:"attributes"`
-	Compliance ComplianceStatus       `json:"compliance"`
 }
 
 // ComplianceStatus represents device compliance information
 type ComplianceStatus struct {
-	Compliant     bool      `json:"compliant"`
-	Violations    []string  `json:"violations"`
 	LastEvaluated time.Time `json:"last_evaluated"`
+	Violations    []string  `json:"violations"`
+	Compliant     bool      `json:"compliant"`
 }
 
 // Config holds configuration for the Vouch client
@@ -85,10 +88,10 @@ type DevicePostureClient interface {
 
 // Client implements DevicePostureClient with caching and circuit breaker
 type Client struct {
-	config         Config
-	httpClient     *http.Client
 	cache          *Cache
 	circuitBreaker *CircuitBreaker
+	httpClient     *http.Client
+	config         Config
 }
 
 // NewClient creates a new Vouch client
@@ -104,10 +107,10 @@ func NewClient(config Config) (*Client, error) {
 		config.MaxEntries = defaultMaxEntries
 	}
 	if config.CircuitBreaker.FailureThreshold == 0 {
-		config.CircuitBreaker.FailureThreshold = 5
+		config.CircuitBreaker.FailureThreshold = defaultFailureThreshold
 	}
 	if config.CircuitBreaker.TimeoutSeconds == 0 {
-		config.CircuitBreaker.TimeoutSeconds = 30 * time.Second
+		config.CircuitBreaker.TimeoutSeconds = defaultCircuitBreakerTimeout
 	}
 
 	httpClient := telemetry.WrapClient(&http.Client{
@@ -176,6 +179,21 @@ func (c *Client) GetPosture(ctx context.Context, deviceID string) (*DevicePostur
 
 // makeRequest performs the actual HTTP request to Vouch server
 func (c *Client) makeRequest(ctx context.Context, deviceID string) (*DevicePosture, error) {
+	req, err := c.buildRequest(ctx, deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.executeWithRetry(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return c.handleResponse(resp)
+}
+
+func (c *Client) buildRequest(ctx context.Context, deviceID string) (*http.Request, error) {
 	url := fmt.Sprintf("%s/%s/%s/%s?format=%s",
 		strings.TrimSuffix(c.config.BaseURL, "/"),
 		apiVersion,
@@ -190,7 +208,10 @@ func (c *Client) makeRequest(ctx context.Context, deviceID string) (*DevicePostu
 
 	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
 	req.Header.Set("Accept", "application/json")
+	return req, nil
+}
 
+func (c *Client) executeWithRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	retryErr := retry.Do(ctx, c.config.RetryConfig, func() error {
 		r, err := c.httpClient.Do(req)
@@ -217,9 +238,10 @@ func (c *Client) makeRequest(ctx context.Context, deviceID string) (*DevicePostu
 	if retryErr != nil {
 		return nil, ErrVouchUnavailable
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
 
-	// Handle different response codes
+func (*Client) handleResponse(resp *http.Response) (*DevicePosture, error) {
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var posture DevicePosture
@@ -227,22 +249,16 @@ func (c *Client) makeRequest(ctx context.Context, deviceID string) (*DevicePostu
 			return nil, fmt.Errorf("decode response: %w", err)
 		}
 		return &posture, nil
-
 	case httpNotFound:
 		return nil, ErrDeviceNotFound
-
 	case httpGone:
 		return nil, ErrDeviceDataStale
-
 	case httpUnauthorized:
 		return nil, ErrUnauthorized
-
 	case httpTooManyRequests:
 		return nil, ErrRateLimited
-
 	case httpInternalError, httpServiceUnavail:
 		return nil, ErrVouchUnavailable
-
 	default:
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
@@ -277,10 +293,10 @@ func (c *Client) ClearCache(deviceID string) {
 
 // Cache provides LRU cache with TTL for device posture data
 type Cache struct {
-	mu         sync.RWMutex
 	entries    map[string]*cacheEntry
-	maxEntries int
 	ttl        time.Duration
+	mu         sync.RWMutex
+	maxEntries int
 }
 
 type cacheEntry struct {
@@ -352,12 +368,12 @@ func (c *Cache) Delete(key string) {
 
 // CircuitBreaker implements a basic circuit breaker pattern
 type CircuitBreaker struct {
-	mu               sync.RWMutex
-	failureThreshold int
-	timeout          time.Duration
-	failures         int
 	lastFailureTime  time.Time
+	timeout          time.Duration
+	mu               sync.RWMutex
 	state            CircuitBreakerState
+	failureThreshold int
+	failures         int
 }
 
 // CircuitBreakerState represents the circuit breaker state

@@ -18,11 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"tailscale.com/tsnet"
-
 	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/metrics"
 	"github.com/EvalOps/keep/pkg/pki"
@@ -30,51 +25,63 @@ import (
 	"github.com/EvalOps/keep/pkg/telemetry"
 	"github.com/EvalOps/keep/pkg/vouch"
 	"github.com/EvalOps/keep/services/authz/token"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"tailscale.com/tsnet"
 )
 
 const (
-	defaultClientTimeout      = 5 * time.Second
-	defaultInventoryTimeout   = 3 * time.Second
-	defaultReadHeaderTimeout  = 10 * time.Second
-	defaultReadTimeout        = 30 * time.Second
-	defaultWriteTimeout       = 30 * time.Second
-	defaultIdleTimeout        = 60 * time.Second
-	defaultInitialInterval    = 200 * time.Millisecond
-	defaultRetryMultiplier    = 1.5
-	defaultMaxInterval        = 2 * time.Second
-	emptyString               = ""
-	contentTypeHeader         = "Content-Type"
-	applicationJSON           = "application/json"
-	applicationPEM            = "application/x-pem-file"
-	serviceNameAuthz          = "authz"
-	serviceNameOPA            = "opa"
-	serviceNameMFA            = "mfa"
-	serviceNameInventory      = "inventory"
-	minRetryAttempts          = 0
-	statusError               = "error"
-	statusInvalid             = "invalid"
-	zeroTrustScore            = 0
-	operationEvaluate         = "evaluate"
-	operationLookup           = "lookup"
-	operationVerify           = "verify"
-	fieldID                   = "id"
-	fieldStatus               = "status"
-	fieldPosture              = "posture"
-	fieldTrustScore           = "trust_score"
-	formatDecimal             = "%d"
-	errDecodeRequest          = "bad request"
-	errMissingMFAParams       = "missing MFA parameters"
-	errMethodNotAllowed       = "method not allowed"
-	errGoogleClientIDRequired = "Google client ID is required"
-	errRootCACertRequired     = "root CA certificate path is required (must be provisioned externally)"
-	errRootCAKeyRequired      = "root CA private key path is required (must be provisioned externally)"
-	errServerAlreadyStarted   = "server already started"
-	errInvalidPEM             = "invalid pem"
-	errMissingToken           = "missing token"
-	errInvalidTokenFormat     = "invalid token format"
-	errUnauthorized           = "unauthorized"
-	errInternalError          = "internal error"
-	errForbidden              = "forbidden"
+	defaultClientTimeout       = 5 * time.Second
+	defaultInventoryTimeout    = 3 * time.Second
+	defaultReadHeaderTimeout   = 10 * time.Second
+	defaultReadTimeout         = 30 * time.Second
+	defaultWriteTimeout        = 30 * time.Second
+	defaultIdleTimeout         = 60 * time.Second
+	defaultInitialInterval     = 200 * time.Millisecond
+	defaultRetryMultiplier     = 1.5
+	defaultMaxInterval         = 2 * time.Second
+	defaultVouchTimeout        = 5 * time.Second
+	defaultVouchCacheTTL       = 5 * time.Minute
+	defaultVouchMaxEntries     = 10000
+	defaultVouchRetryAttempts  = 3
+	defaultVouchFailureThresh  = 5
+	defaultVouchCircuitTimeout = 30 * time.Second
+	emptyString                = ""
+	contentTypeHeader          = "Content-Type"
+	applicationJSON            = "application/json"
+	applicationPEM             = "application/x-pem-file"
+	serviceNameAuthz           = "authz"
+	serviceNameOPA             = "opa"
+	serviceNameMFA             = "mfa"
+	serviceNameInventory       = "inventory"
+	serviceNameVouch           = "vouch"
+	fieldHostname              = "hostname"
+	minRetryAttempts           = 0
+	statusError                = "error"
+	statusInvalid              = "invalid"
+	zeroTrustScore             = 0
+	operationEvaluate          = "evaluate"
+	operationLookup            = "lookup"
+	operationVerify            = "verify"
+	fieldID                    = "id"
+	fieldStatus                = "status"
+	fieldPosture               = "posture"
+	fieldTrustScore            = "trust_score"
+	formatDecimal              = "%d"
+	errDecodeRequest           = "bad request"
+	errMissingMFAParams        = "missing MFA parameters"
+	errMethodNotAllowed        = "method not allowed"
+	errGoogleClientIDRequired  = "Google client ID is required"
+	errRootCACertRequired      = "root CA certificate path is required (must be provisioned externally)"
+	errRootCAKeyRequired       = "root CA private key path is required (must be provisioned externally)"
+	errServerAlreadyStarted    = "server already started"
+	errInvalidPEM              = "invalid pem"
+	errMissingToken            = "missing token"
+	errInvalidTokenFormat      = "invalid token format"
+	errUnauthorized            = "unauthorized"
+	errInternalError           = "internal error"
+	errForbidden               = "forbidden"
 
 	// Tailscale network constants
 	tailscaleIP1  = 100
@@ -521,25 +528,24 @@ func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]a
 func (s *Server) lookupDeviceVouch(ctx context.Context, deviceID string) map[string]any {
 	start := time.Now()
 	posture, err := s.vouchClient.GetPosture(ctx, deviceID)
-
 	if err != nil {
 		// Map Vouch errors to appropriate status
 		var status string
 		switch err {
 		case vouch.ErrDeviceNotFound:
 			status = statusUnregistered
-			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), "not_found")
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameVouch, operationLookup, time.Since(start), "not_found")
 		case vouch.ErrDeviceDataStale:
 			status = statusUnknown
-			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), "stale")
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameVouch, operationLookup, time.Since(start), "stale")
 		case vouch.ErrVouchUnavailable, vouch.ErrCircuitOpen:
 			log.Printf("vouch unavailable for device %s: %v", deviceID, err)
 			status = statusUnknown
-			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusError)
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameVouch, operationLookup, time.Since(start), statusError)
 		default:
 			log.Printf("vouch error for device %s: %v", deviceID, err)
 			status = statusUnknown
-			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusError)
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameVouch, operationLookup, time.Since(start), statusError)
 		}
 
 		return map[string]any{
@@ -549,7 +555,7 @@ func (s *Server) lookupDeviceVouch(ctx context.Context, deviceID string) map[str
 		}
 	}
 
-	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusOK)
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, serviceNameVouch, operationLookup, time.Since(start), statusOK)
 
 	timeSinceLastSeen := time.Since(posture.LastSeen).Minutes()
 
@@ -761,13 +767,13 @@ func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 
 	// Set defaults if not specified
 	if vouchConfig.Timeout == 0 {
-		vouchConfig.Timeout = 5 * time.Second
+		vouchConfig.Timeout = defaultVouchTimeout
 	}
 	if vouchConfig.CacheTTL == 0 {
-		vouchConfig.CacheTTL = 5 * time.Minute
+		vouchConfig.CacheTTL = defaultVouchCacheTTL
 	}
 	if vouchConfig.MaxEntries == 0 {
-		vouchConfig.MaxEntries = 10000
+		vouchConfig.MaxEntries = defaultVouchMaxEntries
 	}
 
 	// Configure retry
@@ -779,15 +785,15 @@ func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
 			MaxInterval:     defaultMaxInterval,
 		}
 		if vouchConfig.RetryConfig.MaxAttempts == 0 {
-			vouchConfig.RetryConfig.MaxAttempts = 3
+			vouchConfig.RetryConfig.MaxAttempts = defaultVouchRetryAttempts
 		}
 	}
 
 	// Configure circuit breaker
 	vouchConfig.CircuitBreaker.Enabled = cfg.VouchCircuitBreaker
 	if vouchConfig.CircuitBreaker.Enabled {
-		vouchConfig.CircuitBreaker.FailureThreshold = 5
-		vouchConfig.CircuitBreaker.TimeoutSeconds = 30 * time.Second
+		vouchConfig.CircuitBreaker.FailureThreshold = defaultVouchFailureThresh
+		vouchConfig.CircuitBreaker.TimeoutSeconds = defaultVouchCircuitTimeout
 	}
 
 	client, err := vouch.NewClient(vouchConfig)
@@ -844,9 +850,9 @@ func (s *Server) getTailscaleInfo() map[string]interface{} {
 	}
 
 	if s.tsServer != nil {
-		info["hostname"] = s.cfg.TailscaleHostname
+		info[fieldHostname] = s.cfg.TailscaleHostname
 		if s.cfg.TailscaleHostname == emptyString {
-			info["hostname"] = "keep-authz"
+			info[fieldHostname] = "keep-authz"
 		}
 
 		if s.tsListener != nil {
