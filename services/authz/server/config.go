@@ -14,6 +14,18 @@ type Config struct {
 	InventoryClientCert string // Client certificate for mTLS to inventory service
 	InventoryClientKey  string // Client private key for mTLS to inventory service
 	InventoryCA         string // CA certificate for inventory service validation
+	
+	// Vouch integration config
+	VouchEnabled        bool
+	VouchBaseURL        string
+	VouchAPIKey         string
+	VouchTimeout        time.Duration
+	VouchCacheTTL       time.Duration
+	VouchMaxEntries     int
+	VouchRetryEnabled   bool
+	VouchRetryAttempts  int
+	VouchCircuitBreaker bool
+	
 	TailscaleAuthKey    string
 	TailscaleHostname   string
 	TailscaleListenAddr string

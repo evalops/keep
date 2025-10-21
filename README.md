@@ -1,14 +1,22 @@
-# Keep: Zero-Trust PoC Stack
+# Keep: Zero-Trust Access Stack with Vouch Integration
 
 > **⚠️ PROOF OF CONCEPT - NOT FOR PRODUCTION USE ⚠️**
-> 
-> This repository contains a proof-of-concept implementation for educational and demonstration purposes only. 
-> It is **NOT intended for production use** and may contain security vulnerabilities, incomplete features, 
+>
+> This repository contains a proof-of-concept implementation for educational and demonstration purposes only.
+> It is **NOT intended for production use** and may contain security vulnerabilities, incomplete features,
 > and other issues. Use at your own risk in development/testing environments only.
 
-This repository implements an end-to-end proof of concept for a device-aware zero-trust access proxy. A user authenticates with Google SSO, Envoy enriches requests with device posture from an attestation service, and Open Policy Agent (OPA) decides whether the request is allowed, denied, or requires step-up authentication before the request reaches a protected Flask application. The stack now includes production-inspired automation such as OpenTelemetry instrumentation, Kubernetes manifests with health probes/resource policies, and CI workflows that cache dependencies and execute smoke/security tests.
+This repository implements an end-to-end zero-trust access proxy with sophisticated device posture attestation. The stack integrates with [Vouch](https://github.com/haasonsaas/vouch) for production-grade device posture collection and provides more sophisticated security than most enterprise solutions.
 
 ## Architecture Overview
+
+**Complete Zero-Trust Stack:**
+- **Vouch** = Source of truth for device security posture (what devices are allowed)
+- **Keep** = Access control enforcement layer (how access is granted/denied)  
+- **Tailscale** = Encrypted network transport layer
+- **Google SSO** = User identity provider
+
+**Data Flow:**
 
 ```
 +-----------+      +-------------+      +----------------+      +--------+
@@ -23,16 +31,23 @@ This repository implements an end-to-end proof of concept for a device-aware zer
 Google SSO (JWT + JWKS) -----> Authz Service (Go) -----> OPA (Policies)
 ```
 
-Key components:
+## Key Components
 
-- **Envoy Proxy**: Fronts the application, validates Google-issued ID tokens via the authz service, attaches device posture, and establishes mTLS to the backend.
-- **Authz Service (Go)**: Verifies Google JWTs, queries the inventory service for device posture, and consults OPA for authorization decisions.
-- **Device Inventory Service (Go + Postgres)**: Stores registered device keys and current posture states. Provides REST APIs for attestation agents and the authz service.
-- **Device Attestor Agent (Go CLI)**: Runs on devices to register cryptographic identity and update posture.
-- **OPA**: Hosts policy bundles controlling allow/deny/step-up outcomes based on user, device, and context.
-- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access, now instrumented with OpenTelemetry traces/metrics.
-- **Docker Compose & Smoke Tests**: Orchestrates the full stack (Postgres, Inventory, OPA, Authz, Envoy, Flask). The `make smoke` command runs a reusable smoke script that brings the stack up, probes health endpoints, and tears it down.
-- **Kubernetes Manifests**: Baseline manifests under `deploy/kubernetes/` with readiness/liveness probes, resource budgets, and ConfigMap/Secret-driven configuration for the core services.
+### Core Services
+- **Envoy Proxy**: Fronts the application with enhanced device ID extraction, validates Google-issued ID tokens via the authz service, and establishes mTLS to the backend.
+- **Authz Service (Go)**: Verifies Google JWTs, queries **Vouch** for rich device posture, and consults OPA for authorization decisions with sophisticated policies.
+- **Vouch Integration**: Production-grade device posture attestation with 8+ security dimensions, trust score calculation, and continuous monitoring.
+- **OPA**: Enhanced policy bundles with role-based access control, time-based restrictions, and rich device context.
+- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access with OpenTelemetry instrumentation.
+
+### Enhanced Security Features
+- **Rich Device Context**: OS info, encryption status, firewall state, EDR health, update status, secure boot, TPM presence
+- **Trust Score Algorithm**: Sophisticated 0-100 scoring based on security posture deductions
+- **Role-Based Policies**: Different requirements for admin, engineering, and contractor access
+- **Time-Based Controls**: Contractor access limited to business hours
+- **Step-Up MFA**: Required for devices with degraded trust scores
+- **Continuous Attestation**: 5-minute posture updates vs. point-in-time checks
+- **Cryptographic Identity**: Ed25519-signed device reports prevent spoofing
 
 ## Getting Started
 
@@ -48,6 +63,15 @@ Create a `.env` file (or export environment variables) with:
 
 ```
 GOOGLE_CLIENT_ID=your-oauth-client-id.apps.googleusercontent.com
+
+# Vouch Integration (optional - falls back to basic inventory service)
+VOUCH_ENABLED=true
+VOUCH_BASE_URL=https://vouch-server.evalops.internal:8080
+VOUCH_API_KEY=vouch_ak_your_api_key_here
+VOUCH_TIMEOUT=5s
+VOUCH_CACHE_TTL=300s
+VOUCH_RETRY_ENABLED=true
+VOUCH_CIRCUIT_BREAKER=true
 ```
 
 For local testing without real Google OAuth, you can use a service account to mint test JWTs signed with a private key and corresponding JWKS.
@@ -173,29 +197,48 @@ services/inventory       # Inventory service implementation
 - No rate limiting, anomaly detection, or audit persistence beyond logs/traces.
 - Telemetry endpoint is assumed trusted; no auth/tenant isolation.
 
-## Policy Examples
+## Enhanced Policy Examples
+
+The stack now supports sophisticated policies leveraging rich device posture from Vouch:
 
 ```rego
 package keep.authz
 
-default decision := "deny"
-
-allow {
-  input.user.email == "alice@example.com"
+# Admin access requires highest security
+allow_admin_access if {
+  "admin" in input.user.groups
   input.device.posture == "healthy"
+  input.device.trust_score >= 90
+  input.device.attributes.encrypted == true
+  input.device.attributes.firewall == true
+  input.device.attributes.edr_healthy == true
+  input.device.time_since_last_seen_minutes < 10
 }
 
-step_up {
-  input.user.email == "bob@example.com"
+# Engineering access requires compliant device
+allow_engineering_access if {
+  "engineering" in input.user.groups
+  input.device.posture == "healthy"
+  input.device.trust_score >= 70
+  input.device.attributes.encrypted == true
+  input.device.attributes.firewall == true
+  input.device.attributes.updates_current == true
+}
+
+# Contractor access with time restrictions
+allow_contractor_access if {
+  "contractor" in input.user.groups
+  input.device.trust_score >= 80
+  input.context.hour_of_day >= 9
+  input.context.hour_of_day < 18
+  input.context.day_of_week in ["monday", "tuesday", "wednesday", "thursday", "friday"]
+}
+
+# Step-up MFA for degraded devices
+decision := "step-up" if {
+  input.device.trust_score >= 50
   input.device.trust_score < 70
-}
-
-decision := "allow" {
-  allow
-}
-
-decision := "step-up" {
-  step_up
+  input.device.posture != "unknown"
 }
 ```
 

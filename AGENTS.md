@@ -22,3 +22,10 @@
 - **Tests**: Use table-driven tests, mock HTTP servers for integration tests
 - **Security**: Never generate CA in services, require external provisioning, use mTLS for internal APIs
 - **Dependencies**: Add new deps via `go get`, run `go mod tidy`, prefer standard library when possible
+
+## File Management
+- **NEVER create files with "Enhanced", "Updated", "New", or similar suffixes**
+- **Always replace the actual production file directly**
+- **Use proper names: `config.yaml` not `config-enhanced.yaml`**
+- **Commit and push changes regularly to git repositories**
+- **Update README files when adding major features**

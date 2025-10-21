@@ -28,6 +28,7 @@ import (
 	"github.com/EvalOps/keep/pkg/pki"
 	"github.com/EvalOps/keep/pkg/retry"
 	"github.com/EvalOps/keep/pkg/telemetry"
+	"github.com/EvalOps/keep/pkg/vouch"
 	"github.com/EvalOps/keep/services/authz/token"
 )
 
@@ -91,18 +92,19 @@ const (
 
 // Server implements the authorization service with OPA policy evaluation
 type Server struct {
-	cfg        *Config
-	retryCfg   *retry.Config
-	httpSrv    *http.Server
-	tsHTTP     *http.Server
-	client     *http.Client
-	invClient  *http.Client
-	ca         *pki.CertificateAuthority
-	tsServer   *tsnet.Server
-	tsListener net.Listener
-	rootCAPEM  []byte
-	mu         sync.Mutex
-	state      struct {
+	cfg          *Config
+	retryCfg     *retry.Config
+	httpSrv      *http.Server
+	tsHTTP       *http.Server
+	client       *http.Client
+	invClient    *http.Client
+	vouchClient  vouch.DevicePostureClient
+	ca           *pki.CertificateAuthority
+	tsServer     *tsnet.Server
+	tsListener   net.Listener
+	rootCAPEM    []byte
+	mu           sync.Mutex
+	state        struct {
 		started bool
 		useTLS  bool
 	}
@@ -155,6 +157,16 @@ func New(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("configure inventory client: %w", err)
 	}
 
+	// Configure Vouch client if enabled
+	var vouchClient vouch.DevicePostureClient
+	if cfg.VouchEnabled {
+		vouchClient, err = configureVouchClient(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("configure vouch client: %w", err)
+		}
+		log.Printf("Vouch client configured for device posture queries")
+	}
+
 	tsSrv, tailscaleListener, err := setupTailscale(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("setup tailscale: %w", err)
@@ -163,13 +175,14 @@ func New(cfg Config) (*Server, error) {
 	cfgCopy := cfg
 	retryCfgCopy := retryCfg
 	s := &Server{
-		cfg:        &cfgCopy,
-		ca:         ca,
-		client:     client,
-		invClient:  invClient,
-		tsServer:   tsSrv,
-		tsListener: tailscaleListener,
-		retryCfg:   &retryCfgCopy,
+		cfg:         &cfgCopy,
+		ca:          ca,
+		client:      client,
+		invClient:   invClient,
+		vouchClient: vouchClient,
+		tsServer:    tsSrv,
+		tsListener:  tailscaleListener,
+		retryCfg:    &retryCfgCopy,
 	}
 
 	r := s.setupRouter()
@@ -361,14 +374,25 @@ func (s *Server) envoyAuthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceID, clientIP string) (string, error) {
+	now := time.Now()
+	
 	body := map[string]any{
 		"input": map[string]any{
 			"user": map[string]any{
 				"email":  claims["email"],
 				"groups": claims["groups"],
 			},
-			"device":    s.lookupDevice(ctx, deviceID),
-			"client_ip": clientIP,
+			"device": s.lookupDevice(ctx, deviceID),
+			"request": map[string]any{
+				"path":   "/", // TODO: extract from context if needed
+				"method": "GET", // TODO: extract from context if needed
+			},
+			"context": map[string]any{
+				"client_ip":      clientIP,
+				"time":           now,
+				"day_of_week":    strings.ToLower(now.Weekday().String()),
+				"hour_of_day":    now.Hour(),
+			},
 		},
 	}
 
@@ -377,7 +401,7 @@ func (s *Server) evaluateOPA(ctx context.Context, claims map[string]any, deviceI
 		return "", fmt.Errorf("failed to marshal OPA request body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OPAURL+"/v1/data/keep/allow", bytes.NewReader(buf))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.cfg.OPAURL+"/v1/data/keep/authz/decision", bytes.NewReader(buf))
 	if err != nil {
 		return "", fmt.Errorf("failed to create OPA HTTP request: %w", err)
 	}
@@ -482,7 +506,69 @@ func parseXFCC(xfcc string) string {
 }
 
 func (s *Server) lookupDevice(ctx context.Context, deviceID string) map[string]any {
-	if deviceID == emptyString || s.cfg.InventoryAPI == emptyString {
+	if deviceID == emptyString {
+		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
+	}
+
+	// Use Vouch client if enabled, otherwise fall back to inventory service
+	if s.cfg.VouchEnabled && s.vouchClient != nil {
+		return s.lookupDeviceVouch(ctx, deviceID)
+	}
+	
+	return s.lookupDeviceInventory(ctx, deviceID)
+}
+
+func (s *Server) lookupDeviceVouch(ctx context.Context, deviceID string) map[string]any {
+	start := time.Now()
+	posture, err := s.vouchClient.GetPosture(ctx, deviceID)
+	
+	if err != nil {
+		// Map Vouch errors to appropriate status
+		var status string
+		switch err {
+		case vouch.ErrDeviceNotFound:
+			status = statusUnregistered
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), "not_found")
+		case vouch.ErrDeviceDataStale:
+			status = statusUnknown
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), "stale")
+		case vouch.ErrVouchUnavailable, vouch.ErrCircuitOpen:
+			log.Printf("vouch unavailable for device %s: %v", deviceID, err)
+			status = statusUnknown
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusError)
+		default:
+			log.Printf("vouch error for device %s: %v", deviceID, err)
+			status = statusUnknown
+			telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusError)
+		}
+		
+		return map[string]any{
+			fieldID:         deviceID,
+			fieldPosture:    status,
+			fieldTrustScore: zeroTrustScore,
+		}
+	}
+	
+	telemetry.RecordDependencyRequest(ctx, serviceNameAuthz, "vouch", operationLookup, time.Since(start), statusOK)
+	
+	timeSinceLastSeen := time.Since(posture.LastSeen).Minutes()
+	
+	return map[string]any{
+		fieldID:                          posture.ID,
+		fieldPosture:                     posture.Posture,
+		fieldTrustScore:                  posture.TrustScore,
+		"hostname":                       posture.Hostname,
+		"node_id":                        posture.NodeID,
+		"last_seen":                      posture.LastSeen,
+		"time_since_last_seen_minutes":   timeSinceLastSeen,
+		"compliant":                      posture.Compliance.Compliant,
+		"violations":                     posture.Compliance.Violations,
+		"attributes":                     posture.Attributes,
+	}
+}
+
+func (s *Server) lookupDeviceInventory(ctx context.Context, deviceID string) map[string]any {
+	if s.cfg.InventoryAPI == emptyString {
 		return map[string]any{fieldID: deviceID, fieldPosture: statusUnknown}
 	}
 
@@ -661,6 +747,55 @@ func configureInventoryClient(cfg Config) (*http.Client, error) {
 		Timeout:   defaultInventoryTimeout,
 		Transport: transport,
 	}), nil
+}
+
+// configureVouchClient creates a Vouch client for device posture queries
+func configureVouchClient(cfg Config) (vouch.DevicePostureClient, error) {
+	vouchConfig := vouch.Config{
+		BaseURL:     cfg.VouchBaseURL,
+		APIKey:      cfg.VouchAPIKey,
+		Timeout:     cfg.VouchTimeout,
+		CacheTTL:    cfg.VouchCacheTTL,
+		MaxEntries:  cfg.VouchMaxEntries,
+	}
+	
+	// Set defaults if not specified
+	if vouchConfig.Timeout == 0 {
+		vouchConfig.Timeout = 5 * time.Second
+	}
+	if vouchConfig.CacheTTL == 0 {
+		vouchConfig.CacheTTL = 5 * time.Minute
+	}
+	if vouchConfig.MaxEntries == 0 {
+		vouchConfig.MaxEntries = 10000
+	}
+	
+	// Configure retry
+	if cfg.VouchRetryEnabled {
+		vouchConfig.RetryConfig = retry.Config{
+			MaxAttempts:     cfg.VouchRetryAttempts,
+			InitialInterval: defaultInitialInterval,
+			Multiplier:      defaultRetryMultiplier,
+			MaxInterval:     defaultMaxInterval,
+		}
+		if vouchConfig.RetryConfig.MaxAttempts == 0 {
+			vouchConfig.RetryConfig.MaxAttempts = 3
+		}
+	}
+	
+	// Configure circuit breaker
+	vouchConfig.CircuitBreaker.Enabled = cfg.VouchCircuitBreaker
+	if vouchConfig.CircuitBreaker.Enabled {
+		vouchConfig.CircuitBreaker.FailureThreshold = 5
+		vouchConfig.CircuitBreaker.TimeoutSeconds = 30 * time.Second
+	}
+	
+	client, err := vouch.NewClient(vouchConfig)
+	if err != nil {
+		return nil, fmt.Errorf("create vouch client: %w", err)
+	}
+	
+	return client, nil
 }
 
 // setupTailscale configures and initializes the Tailscale tsnet server

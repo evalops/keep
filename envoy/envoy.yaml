@@ -35,6 +35,42 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
                       inline_code: |
                         function envoy_on_request(request_handle)
+                          -- Extract and normalize device ID from multiple sources
+                          local device_id = nil
+                          
+                          -- Priority 1: X-Device-ID header (explicit)
+                          device_id = request_handle:headers():get("x-device-id")
+                          
+                          -- Priority 2: Tailscale node ID from client cert CN
+                          if not device_id or device_id == "" then
+                            local xfcc = request_handle:headers():get("x-forwarded-client-cert")
+                            if xfcc then
+                              -- Parse subject from XFCC header: Subject="CN=tailscale:abc123"
+                              local subject = string.match(xfcc, 'Subject="([^"]*)"')
+                              if subject then
+                                local cn = string.match(subject, "CN=([^,]*)")
+                                if cn and string.match(cn, "^tailscale:") then
+                                  device_id = cn
+                                end
+                              end
+                            end
+                          end
+                          
+                          -- Priority 3: device_id query parameter
+                          if not device_id or device_id == "" then
+                            local path = request_handle:headers():get(":path")
+                            if path then
+                              device_id = string.match(path, "[?&]device_id=([^&]*)")
+                            end
+                          end
+                          
+                          -- Set normalized device ID header (or "unknown" if not found)
+                          if device_id and device_id ~= "" then
+                            request_handle:headers():replace("x-device-id", device_id)
+                          else
+                            request_handle:headers():replace("x-device-id", "unknown")
+                          end
+                          
                           -- Check if this is an MFA verification callback
                           local path = request_handle:headers():get(":path")
                           if path and string.match(path, "^/auth/mfa/callback") then
@@ -121,14 +157,24 @@ static_resources:
                               - exact: x-forwarded-client-cert
                               - exact: x-envoy-external-address
                               - exact: x-real-ip
+                              - exact: x-mfa-session
+                              - exact: x-mfa-code
                         authorization_response:
                           allowed_upstream_headers:
                             patterns:
                               - exact: x-device-id
                               - exact: x-client-subject
+                              - exact: x-user-email
+                              - exact: x-user-name
+                              - exact: x-user-groups
+                              - exact: x-device-hostname
+                              - exact: x-device-trust-score
+                              - exact: x-device-compliant
                           allowed_client_headers:
                             patterns:
                               - exact: authorization
+                              - exact: x-auth-error
+                              - exact: x-auth-decision
                   - name: envoy.filters.http.router
   clusters:
     - name: flask_service
@@ -168,8 +214,8 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                    address: authz
-                    port_value: 8443
+                      address: authz
+                      port_value: 8443
     - name: mfa_cluster
       connect_timeout: 0.5s
       type: logical_dns
