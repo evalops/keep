@@ -92,10 +92,39 @@ cert-refresh:
 # Tool installation and checks
 install-tools:
 	@echo "Installing Go tools..."
+	mkdir -p $(GOBIN)
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@latest
+	@echo "Ensuring OPA CLI is available..."
+	@NEED_OPA=1; \
+	if command -v opa >/dev/null 2>&1; then \
+		if opa version >/dev/null 2>&1; then \
+			echo "OPA already installed"; \
+			NEED_OPA=0; \
+		else \
+			echo "Existing OPA binary is unusable. Reinstalling..."; \
+		fi; \
+	fi; \
+	if [ $$NEED_OPA -eq 1 ]; then \
+		OPA_OS=$$(uname | tr '[:upper:]' '[:lower:]'); \
+		OPA_ARCH=$$(uname -m); \
+		case $$OPA_ARCH in \
+			x86_64) OPA_ARCH=amd64 ;; \
+			aarch64|arm64) OPA_ARCH=arm64 ;; \
+			*) echo "Unsupported architecture: $$OPA_ARCH" >&2; exit 1 ;; \
+		esac; \
+		case $$OPA_OS in \
+			linux|darwin) ;; \
+			*) echo "Unsupported OS: $$OPA_OS" >&2; exit 1 ;; \
+		esac; \
+		OPA_URL="https://github.com/open-policy-agent/opa/releases/latest/download/opa_$${OPA_OS}_$${OPA_ARCH}_static"; \
+		echo "Downloading OPA from $$OPA_URL"; \
+		curl -fsSL -o $(GOBIN)/opa.tmp "$$OPA_URL"; \
+		chmod +x $(GOBIN)/opa.tmp; \
+		mv $(GOBIN)/opa.tmp $(GOBIN)/opa; \
+	fi
 	@echo "Installing Python tools..."
 	$(PIP_BIN) install black flake8 isort mypy
 
