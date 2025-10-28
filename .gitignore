@@ -3,4 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+venv/
+app/venv/
+agent/attestor-agent
 

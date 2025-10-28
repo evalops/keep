@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"time"
 
+	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/services/mfa"
 )
 
@@ -15,6 +15,9 @@ const (
 )
 
 func main() {
+	logging.Initialize("mfa", getenv("LOG_LEVEL", "info"))
+	logger := logging.NewServiceLogger("cmd")
+
 	addr := getenv("MFA_LISTEN_ADDR", defaultAddr)
 	sessionTimeout := getenvDuration("MFA_SESSION_TIMEOUT", 5*time.Minute)
 
@@ -26,9 +29,9 @@ func main() {
 
 	server := mfa.New(cfg)
 
-	log.Printf("Starting MFA service on %s", addr)
+	logger.Info().Str("addr", addr).Msg("starting MFA service")
 	if err := server.Start(context.Background()); err != nil {
-		log.Fatalf("MFA service failed: %v", err)
+		logger.Fatal().Err(err).Msg("MFA service failed")
 	}
 }
 

@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"time"
 
+	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/services/inventory/server"
 )
 
@@ -19,6 +19,9 @@ const (
 )
 
 func main() {
+	logging.Initialize("inventory-service", envDefault("LOG_LEVEL", "info"))
+	logger := logging.NewServiceLogger("bootstrap")
+
 	cfg := server.Config{
 		Addr:      envDefault("INVENTORY_ADDR", defaultBindAddr),
 		DSN:       envDefault("INVENTORY_DSN", defaultDSN),
@@ -30,11 +33,11 @@ func main() {
 
 	srv, err := server.NewServer(cfg)
 	if err != nil {
-		log.Fatalf("init inventory: %v", err)
+		logger.Fatal().Err(err).Msg("failed to init inventory")
 	}
 
 	if err := srv.Start(context.Background()); err != nil {
-		log.Fatalf("inventory exit: %v", err)
+		logger.Fatal().Err(err).Msg("inventory service exited")
 	}
 }
 

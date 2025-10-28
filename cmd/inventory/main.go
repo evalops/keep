@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"time"
 
+	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/secrets"
 	"github.com/EvalOps/keep/pkg/telemetry"
 	serverpkg "github.com/EvalOps/keep/services/inventory/server"
@@ -21,6 +21,9 @@ const (
 )
 
 func main() {
+	logging.Initialize(defaultServiceName, envOrDefault("LOG_LEVEL", "info"))
+	logger := logging.NewServiceLogger("cmd")
+
 	var err error
 	// Initialize secret management
 	secretHelper := secrets.NewHelperFromEnv()
@@ -30,7 +33,7 @@ func main() {
 	dbConfig := secretHelper.LoadDatabaseConfig()
 	dsn, err := secrets.BuildDSN(dbConfig)
 	if err != nil {
-		log.Fatalf("inventory dsn: %v", err)
+		logger.Fatal().Err(err).Msg("failed to build inventory DSN")
 	}
 
 	// Load TLS configuration from secrets
@@ -56,17 +59,17 @@ func main() {
 	}
 
 	if err = telemetry.Init(ctx, telemetryCfg); err != nil {
-		log.Printf("telemetry init failed: %v", err)
+		logger.Warn().Err(err).Msg("inventory telemetry initialization failed")
 	}
 
 	srv, err := serverpkg.NewServer(cfg)
 	if err != nil {
-		log.Fatalf("init inventory: %v", err)
+		logger.Fatal().Err(err).Msg("failed to initialize inventory server")
 	}
 
 	if err := srv.Start(ctx); err != nil {
 		if !errors.Is(err, context.Canceled) {
-			log.Fatalf("inventory exit: %v", err)
+			logger.Fatal().Err(err).Msg("inventory server exited with error")
 		}
 	}
 }

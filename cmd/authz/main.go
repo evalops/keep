@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/secrets"
 	"github.com/EvalOps/keep/services/authz/server"
 )
@@ -23,6 +23,9 @@ const (
 )
 
 func main() {
+	logging.Initialize("authz", getenv("LOG_LEVEL", "info"))
+	logger := logging.NewServiceLogger("cmd")
+
 	// Initialize secret management
 	secretHelper := secrets.NewHelperFromEnv()
 	secretHelper.LogSecretSource()
@@ -41,7 +44,7 @@ func main() {
 	googleClientID := secretHelper.GetOrDefault("GOOGLE_CLIENT_ID", apiKeys["GOOGLE_CLIENT_ID"])
 
 	if googleClientID == "" {
-		log.Fatal("GOOGLE_CLIENT_ID must be set")
+		logger.Fatal().Msg("GOOGLE_CLIENT_ID must be set")
 	}
 
 	srv, err := server.New(server.Config{
@@ -68,7 +71,7 @@ func main() {
 		RetryMaxElapsed:     getenvDuration("AUTHZ_RETRY_MAX_ELAPSED", 10*time.Second),
 	})
 	if err != nil {
-		log.Fatalf("failed to create authz server: %v", err)
+		logger.Fatal().Err(err).Msg("failed to create authz server")
 	}
 
 	ctx := context.Background()
@@ -78,7 +81,7 @@ func main() {
 	}
 
 	if !errors.Is(runErr, context.Canceled) {
-		log.Fatalf("server exited: %v", runErr)
+		logger.Fatal().Err(runErr).Msg("authz server exited unexpectedly")
 	}
 }
 

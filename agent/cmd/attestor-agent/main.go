@@ -2,12 +2,16 @@ package main
 
 import (
 	"flag"
-	"log"
 	"time"
+
+	"github.com/rs/zerolog"
 
 	"github.com/EvalOps/keep/agent/internal/posture"
 	"github.com/EvalOps/keep/agent/internal/service"
+	"github.com/EvalOps/keep/pkg/logging"
 )
+
+var logger zerolog.Logger
 
 func main() {
 	var (
@@ -26,6 +30,9 @@ func main() {
 	)
 	flag.Parse()
 
+	logging.Initialize("attestor-agent", *logLevel)
+	logger = logging.NewServiceLogger("cmd")
+
 	// Show current posture and exit if requested
 	if *showPosture {
 		showCurrentPosture()
@@ -33,7 +40,7 @@ func main() {
 	}
 
 	if *deviceID == "" {
-		log.Fatal("--device-id is required")
+		logger.Fatal().Msg("--device-id is required")
 	}
 
 	// Create service configuration
@@ -54,7 +61,7 @@ func main() {
 	// Create and start the service
 	svc := service.New(config)
 	if err := svc.Start(); err != nil {
-		log.Fatalf("Service failed: %v", err)
+		logger.Fatal().Err(err).Msg("service failed")
 	}
 }
 
@@ -63,23 +70,21 @@ func showCurrentPosture() {
 	collector := posture.GetCollector()
 	postureData, err := collector.CollectPosture()
 	if err != nil {
-		log.Fatalf("Failed to collect posture: %v", err)
+		logger.Fatal().Err(err).Msg("failed to collect posture")
 	}
 
 	postureJSON, err := postureData.ToJSON()
 	if err != nil {
-		log.Fatalf("Failed to serialize posture: %v", err)
+		logger.Fatal().Err(err).Msg("failed to serialize posture")
 	}
 
-	log.Printf("Device Posture Information:")
-	log.Printf("Status: %s", postureData.Status)
-	log.Printf("Trust Score: %d/100", postureData.TrustScore)
-	log.Printf("OS: %s %s (%s)", postureData.OS.Name, postureData.OS.Version, postureData.OS.Arch)
-	log.Printf("Firewall: %s (enabled: %t)", postureData.Firewall.Service, postureData.Firewall.Enabled)
-	log.Printf("Antivirus: %t", postureData.AntiVirus)
-	log.Printf("System Updated: %t", postureData.SystemUpdate)
-	log.Printf("Disk Encrypted: %t", postureData.DiskEncrypted)
-	log.Printf("Screen Lock: %t", postureData.ScreenLock)
-	log.Printf("\nFull JSON:")
-	log.Printf("%s", postureJSON)
+	logger.Info().Msg("device posture information")
+	logger.Info().Str("status", postureData.Status.String()).Int("trust_score", postureData.TrustScore).Msg("posture summary")
+	logger.Info().Str("os_name", postureData.OS.Name).Str("os_version", postureData.OS.Version).Str("architecture", postureData.OS.Arch).Msg("os details")
+	logger.Info().Str("firewall_service", postureData.Firewall.Service).Bool("firewall_enabled", postureData.Firewall.Enabled).Msg("firewall status")
+	logger.Info().Bool("antivirus_enabled", postureData.AntiVirus).Msg("antivirus status")
+	logger.Info().Bool("system_updated", postureData.SystemUpdate).Msg("update status")
+	logger.Info().Bool("disk_encrypted", postureData.DiskEncrypted).Msg("disk encryption status")
+	logger.Info().Bool("screen_lock_enabled", postureData.ScreenLock).Msg("screen lock status")
+	logger.Info().RawJSON("posture", []byte(postureJSON)).Msg("posture json")
 }

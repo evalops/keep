@@ -3,9 +3,10 @@ package secrets
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strings"
+
+	"github.com/EvalOps/keep/pkg/logging"
 )
 
 const (
@@ -18,6 +19,8 @@ type Helper struct {
 	manager Manager
 	ctx     context.Context
 }
+
+var logger = logging.NewServiceLogger("secrets")
 
 // NewHelper creates a new secret helper
 func NewHelper(manager Manager) *Helper {
@@ -45,7 +48,7 @@ func NewHelperFromEnv() *Helper {
 
 	manager, err := NewManager(cfg)
 	if err != nil {
-		log.Printf("Failed to create secret manager, falling back to env: %v", err)
+		logger.Warn().Err(err).Msg("failed to create secret manager, falling back to environment configuration")
 		manager = NewEnvManager(Config{})
 	}
 
@@ -179,14 +182,14 @@ func BuildPostgresDSN(user, password, host, port, dbname string) string {
 func (h *Helper) LogSecretSource() {
 	switch h.manager.(type) {
 	case *EnvManager:
-		log.Println("Using environment variables for secret management")
+		logger.Info().Msg("using environment variables for secret management")
 	case *SSMManager:
-		log.Println("Using AWS Systems Manager Parameter Store for secrets")
+		logger.Info().Msg("using AWS Systems Manager Parameter Store for secrets")
 	case *VaultManager:
-		log.Println("Using HashiCorp Vault for secret management")
+		logger.Info().Msg("using HashiCorp Vault for secret management")
 	case *AzureManager:
-		log.Println("Using Azure Key Vault for secret management")
+		logger.Info().Msg("using Azure Key Vault for secret management")
 	default:
-		log.Println("Using unknown secret management system")
+		logger.Info().Msg("using unknown secret management system")
 	}
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 
+	"github.com/rs/zerolog"
+
+	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/secrets"
 )
 
@@ -34,7 +36,12 @@ const (
 	logMissingKeyValue     = "Key and value are required for set action"
 )
 
+var cliLogger zerolog.Logger
+
 func main() {
+	logging.Initialize("secrets-cli", os.Getenv("LOG_LEVEL"))
+	cliLogger = logging.NewServiceLogger("cmd")
+
 	var (
 		action     = flag.String("action", actionGet, "Action to perform: get, set, list, migrate")
 		secretType = flag.String("type", "", "Secret manager type: env, ssm, vault, azure")
@@ -76,19 +83,19 @@ func main() {
 
 	manager, err := secrets.NewManager(cfg)
 	if err != nil {
-		log.Fatalf("%s: %v", logPrefixFailCreate, err)
+		cliLogger.Fatal().Err(err).Msg(logPrefixFailCreate)
 	}
 
 	switch *action {
 	case actionGet:
 		if *key == emptyString {
-			log.Fatal(logMissingKey)
+			cliLogger.Fatal().Msg(logMissingKey)
 		}
 		handleGet(ctx, manager, *key, *format)
 
 	case actionSet:
 		if *key == emptyString || *value == emptyString {
-			log.Fatal(logMissingKeyValue)
+			cliLogger.Fatal().Msg(logMissingKeyValue)
 		}
 		handleSet(ctx, manager, *key, *value)
 
@@ -102,14 +109,14 @@ func main() {
 		handleInit(*secretType)
 
 	default:
-		log.Fatalf("%s: %s", logPrefixUnknownAction, *action)
+		cliLogger.Fatal().Str("action", *action).Msg(logPrefixUnknownAction)
 	}
 }
 
 func handleGet(ctx context.Context, manager secrets.Manager, key, format string) {
 	secretValue, err := manager.GetSecret(ctx, key)
 	if err != nil {
-		log.Fatalf("Failed to get secret %s: %v", key, err)
+		cliLogger.Fatal().Err(err).Str("key", key).Msg("failed to get secret")
 	}
 
 	switch format {
@@ -123,7 +130,7 @@ func handleGet(ctx context.Context, manager secrets.Manager, key, format string)
 func handleSet(ctx context.Context, manager secrets.Manager, key, value string) {
 	err := manager.SetSecret(ctx, key, value)
 	if err != nil {
-		log.Fatalf("Failed to set secret %s: %v", key, err)
+		cliLogger.Fatal().Err(err).Str("key", key).Msg("failed to set secret")
 	}
 	fmt.Printf("Secret %s set successfully\n", key)
 }
@@ -174,7 +181,7 @@ func handleMigrate(ctx context.Context, cfg secrets.Config) {
 	// Destination: configured manager
 	dest, err := secrets.NewManager(cfg)
 	if err != nil {
-		log.Fatalf("%s: %v", logPrefixFailDest, err)
+		cliLogger.Fatal().Err(err).Msg(logPrefixFailDest)
 	}
 
 	// Common secrets to migrate

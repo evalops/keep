@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/jackc/pgx/v5/stdlib" // register pgx driver with database/sql
 
+	"github.com/EvalOps/keep/pkg/logging"
 	"github.com/EvalOps/keep/pkg/telemetry"
 )
 
@@ -38,6 +38,8 @@ const (
 	headerContentType = "Content-Type"
 	contentTypeJSON   = "application/json"
 )
+
+var logger = logging.NewServiceLogger("inventory-server")
 
 type Config struct {
 	Addr        string
@@ -96,23 +98,23 @@ func (s *Server) Start(ctx context.Context) error {
 			// Configure TLS with optional mTLS
 			tlsConfig, configErr := s.configureTLS()
 			if configErr != nil {
-				log.Printf("TLS configuration failed: %v", configErr)
+				logger.Error().Err(configErr).Msg("TLS configuration failed")
 				return
 			}
 
 			s.http.TLSConfig = tlsConfig
-			log.Printf("Starting inventory service with TLS on %s", s.cfg.Addr)
+			logger.Info().Str("addr", s.cfg.Addr).Msg("starting inventory service with TLS")
 			if s.cfg.RequireMTLS {
-				log.Printf("mTLS client authentication required")
+				logger.Info().Msg("mTLS client authentication required")
 			}
 			err = s.http.ListenAndServeTLS(s.cfg.TLSCert, s.cfg.TLSKey)
 		} else {
-			log.Printf("Starting inventory service without TLS on %s", s.cfg.Addr)
+			logger.Info().Str("addr", s.cfg.Addr).Msg("starting inventory service without TLS")
 			err = s.http.ListenAndServe()
 		}
 
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("inventory listen error: %v", err)
+			logger.Error().Err(err).Msg("inventory listen error")
 		}
 	}()
 
@@ -161,22 +163,24 @@ func (s *Server) requireClientCertMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// If mTLS is not required, check if client cert is present and valid
 		if r.TLS == nil {
-			log.Printf("No TLS connection for authenticated endpoint")
+			logger.Error().Msg("TLS connection required for authenticated endpoint")
 			http.Error(w, "TLS required", http.StatusUpgradeRequired)
 			return
 		}
 
 		if len(r.TLS.PeerCertificates) == 0 {
 			if s.cfg.RequireMTLS {
-				log.Printf("No client certificate provided for authenticated endpoint")
+				logger.Error().Msg("client certificate required for authenticated endpoint")
 				http.Error(w, "Client certificate required", http.StatusUnauthorized)
 				return
 			}
 		} else {
 			// Log client certificate info for audit purposes
 			cert := r.TLS.PeerCertificates[0]
-			log.Printf("Authenticated request from client: %s (issued by: %s)",
-				cert.Subject.CommonName, cert.Issuer.CommonName)
+			logger.Info().
+				Str("subject", cert.Subject.CommonName).
+				Str("issuer", cert.Issuer.CommonName).
+				Msg("authenticated client request")
 		}
 
 		next.ServeHTTP(w, r)
@@ -220,7 +224,7 @@ func (s *Server) setupRouter() chi.Router {
 func (*Server) health(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
-		log.Printf("failed to encode health response: %v", err)
+		logger.Error().Err(err).Msg("failed to encode health response")
 	}
 }
 
@@ -246,7 +250,7 @@ func (s *Server) updateDevicePosture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusUpdated}); err != nil {
-		log.Printf("failed to encode posture update response: %v", err)
+		logger.Error().Err(err).Msg("failed to encode posture update response")
 	}
 }
 
@@ -277,7 +281,7 @@ func (s *Server) listDevices(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	if err := json.NewEncoder(w).Encode(list); err != nil {
-		log.Printf("failed to encode list devices response: %v", err)
+		logger.Error().Err(err).Msg("failed to encode list devices response")
 	}
 }
 
@@ -298,7 +302,7 @@ func (s *Server) registerDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusOKValue}); err != nil {
-		log.Printf("failed to encode registration response: %v", err)
+		logger.Error().Err(err).Msg("failed to encode registration response")
 	}
 }
 
@@ -314,7 +318,7 @@ func (s *Server) deviceDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := json.NewEncoder(w).Encode(d); err != nil {
-		log.Printf("failed to encode get device response: %v", err)
+		logger.Error().Err(err).Msg("failed to encode get device response")
 	}
 }
 
@@ -334,6 +338,6 @@ func (s *Server) updateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := json.NewEncoder(w).Encode(map[string]string{statusKey: statusUpdated}); err != nil {
-		log.Printf("failed to encode update device response: %v", err)
+		logger.Error().Err(err).Msg("failed to encode update device response")
 	}
 }
