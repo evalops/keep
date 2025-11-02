@@ -101,18 +101,18 @@ const (
 
 // Server implements the authorization service with OPA policy evaluation
 type Server struct {
-	cfg         *Config
-	retryCfg    *retry.Config
+	logger      zerolog.Logger
+	tsListener  net.Listener
+	vouchClient vouch.DevicePostureClient
 	httpSrv     *http.Server
 	tsHTTP      *http.Server
 	client      *http.Client
 	invClient   *http.Client
-	vouchClient vouch.DevicePostureClient
 	ca          *pki.CertificateAuthority
 	tsServer    *tsnet.Server
-	tsListener  net.Listener
+	cfg         *Config
+	retryCfg    *retry.Config
 	rootCAPEM   []byte
-	logger      zerolog.Logger
 	mu          sync.Mutex
 	state       struct {
 		started bool
