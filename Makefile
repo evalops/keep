@@ -94,9 +94,9 @@ install-tools:
 	@echo "Installing Go tools..."
 	mkdir -p $(GOBIN)
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	go install golang.org/x/tools/cmd/goimports@latest
+	go install golang.org/x/tools/cmd/goimports@v0.36.0
 	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install github.com/securego/gosec/v2/cmd/gosec@latest
+	go install github.com/securego/gosec/v2/cmd/gosec@v2.22.6
 	@echo "Ensuring OPA CLI is available..."
 	@NEED_OPA=1; \
 	if command -v opa >/dev/null 2>&1; then \
