@@ -16,6 +16,24 @@ if os.getenv("OTEL_SDK_DISABLED", "").lower() not in {"true", "1"}:
 F = TypeVar("F", bound=Callable[..., ResponseReturnValue])
 
 
+def _coerce_header(value: str | None) -> str:
+    if value is None:
+        return "unknown"
+    cleaned = value.strip()
+    return cleaned if cleaned else "unknown"
+
+
+def _normalize_cert_subject(value: str | None) -> str:
+    subject = _coerce_header(value)
+    if subject == "unknown":
+        return subject
+    prefix = "subject="
+    if subject.lower().startswith(prefix):
+        remainder = subject[len(prefix) :].lstrip()
+        return remainder or "unknown"
+    return subject
+
+
 def route(rule: str, **options: Any) -> Callable[[F], F]:
     return cast(Callable[[F], F], app.route(rule, **options))
 
@@ -42,10 +60,8 @@ def health() -> Dict[str, str]:
 @route("/")
 def index() -> str:
     with record_route_metrics("index"):
-        cert_subject = request.headers.get("X-Client-Subject", "unknown") or "unknown"
-        if cert_subject.startswith("Subject="):
-            cert_subject = cert_subject.replace("Subject=", "", 1)
-        device_id = request.headers.get("X-Device-ID", "unknown") or "unknown"
+        cert_subject = _normalize_cert_subject(request.headers.get("X-Client-Subject"))
+        device_id = _coerce_header(request.headers.get("X-Device-ID"))
         return (
             f"Hello from keep protected app!\n"
             f"Client cert subject: {cert_subject}\n"

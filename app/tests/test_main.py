@@ -127,3 +127,24 @@ def test_empty_headers(client: TestClient) -> None:
     # Empty headers should fall back to "unknown"
     assert "Client cert subject: unknown" in text
     assert "Device ID: unknown" in text
+
+
+def test_headers_whitespace_only(client: TestClient) -> None:
+    """Whitespace-only headers should be treated as unknown."""
+    headers = {"X-Client-Subject": "   ", "X-Device-ID": " \t"}
+    response = client.get("/", headers=headers)
+    assert response.status_code == 200
+
+    text = response.get_data(as_text=True)
+    assert "Client cert subject: unknown" in text
+    assert "Device ID: unknown" in text
+
+
+def test_client_subject_case_insensitive_prefix(client: TestClient) -> None:
+    """Subject prefix removal should be case-insensitive and trim spacing."""
+    headers = {"X-Client-Subject": "subject= CN=case@example.com"}
+    response = client.get("/", headers=headers)
+    assert response.status_code == 200
+
+    text = response.get_data(as_text=True)
+    assert "Client cert subject: CN=case@example.com" in text
