@@ -126,7 +126,10 @@ install-tools:
 		mv $(GOBIN)/opa.tmp $(GOBIN)/opa; \
 	fi
 	@echo "Installing Python tools..."
-	uv pip install --system black flake8 isort mypy
+	uv tool install black
+	uv tool install flake8
+	uv tool install isort
+	uv tool install mypy
 
 setup-venv:
 	uv venv $(VENV)

@@ -86,7 +86,8 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv pip install --system -r app/requirements.txt
+          uv venv .venv
+          uv pip install -r app/requirements.txt
           make install-tools
 
       - name: Wait for database
