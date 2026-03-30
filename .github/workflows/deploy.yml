@@ -30,7 +30,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push authz image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: services/authz/Dockerfile
@@ -39,7 +39,7 @@ jobs:
             ghcr.io/${{ github.repository }}/authz:sha-${{ github.sha }}
 
       - name: Build and push inventory image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: services/inventory/Dockerfile
@@ -48,7 +48,7 @@ jobs:
             ghcr.io/${{ github.repository }}/inventory:sha-${{ github.sha }}
 
       - name: Build and push app image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: app/Dockerfile
