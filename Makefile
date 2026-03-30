@@ -1,26 +1,7 @@
 PROJECT_NAME := keep
-VENV ?= .venv
-VENV_BIN := $(VENV)/bin
-PYTHON_BIN := python3
-PIP_BIN := pip
-FLAKE8_CMD = $(PYTHON_BIN) -m flake8
-MYPY_CMD = $(PYTHON_BIN) -m mypy
-BLACK_CMD = $(PYTHON_BIN) -m black
-ISORT_CMD = $(PYTHON_BIN) -m isort
-PYTEST_CMD = $(PYTHON_BIN) -m pytest
 GOLANGCI_LINT ?= golangci-lint
 GOBIN := $(shell go env GOPATH)/bin
 export PATH := $(GOBIN):$(PATH)
-
-ifneq ($(wildcard $(VENV_BIN)/python3),)
-PYTHON_BIN := $(VENV_BIN)/python3
-PIP_BIN := $(VENV_BIN)/pip
-FLAKE8_BIN := $(VENV_BIN)/flake8
-MYPY_BIN := $(VENV_BIN)/mypy
-BLACK_BIN := $(VENV_BIN)/black
-ISORT_BIN := $(VENV_BIN)/isort
-PYTEST_CMD := $(PYTHON_BIN) -m pytest
-endif
 
 .PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security
 
@@ -34,7 +15,7 @@ build:
 
 test:
 	go test ./...
-	$(PYTEST_CMD)
+	pytest
 
 smoke:
 	COMPOSE_FILE=docker-compose.yml ./scripts/smoke-tests.sh
@@ -49,8 +30,8 @@ format-go:
 
 format-python:
 	@echo "Formatting Python code..."
-	$(BLACK_CMD) app/
-	$(ISORT_CMD) app/
+	black app/
+	isort app/
 
 # Linting targets  
 lint: lint-go lint-python
@@ -62,8 +43,8 @@ lint-go:
 
 lint-python:
 	@echo "Linting Python code..."
-	$(FLAKE8_CMD) app/
-	$(MYPY_CMD) app/ --ignore-missing-imports
+	flake8 app/
+	mypy app/ --ignore-missing-imports
 
 docker-up:
 	docker compose up --build -d
@@ -144,10 +125,10 @@ check-tools:
 	@command -v govulncheck >/dev/null 2>&1 || { echo "govulncheck not found. Run 'make install-tools'"; exit 1; }
 	@command -v gosec >/dev/null 2>&1 || { echo "gosec not found. Run 'make install-tools'"; exit 1; }
 	@echo "Checking Python tools..."
-	@$(BLACK_CMD) --version >/dev/null 2>&1 || { echo "black not available. Run 'make install-tools'"; exit 1; }
-	@$(FLAKE8_CMD) --version >/dev/null 2>&1 || { echo "flake8 not available. Run 'make install-tools'"; exit 1; }
-	@$(ISORT_CMD) --version >/dev/null 2>&1 || { echo "isort not available. Run 'make install-tools'"; exit 1; }
-	@$(MYPY_CMD) --version >/dev/null 2>&1 || { echo "mypy not available. Run 'make install-tools'"; exit 1; }
+	@command -v black >/dev/null 2>&1 || { echo "black not found. Run 'make install-tools'"; exit 1; }
+	@command -v flake8 >/dev/null 2>&1 || { echo "flake8 not found. Run 'make install-tools'"; exit 1; }
+	@command -v isort >/dev/null 2>&1 || { echo "isort not found. Run 'make install-tools'"; exit 1; }
+	@command -v mypy >/dev/null 2>&1 || { echo "mypy not found. Run 'make install-tools'"; exit 1; }
 	@echo "All tools are available!"
 
 security:
