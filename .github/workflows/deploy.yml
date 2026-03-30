@@ -35,7 +35,8 @@ jobs:
           context: .
           file: services/authz/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/authz:latest
+          tags: |
+            ghcr.io/${{ github.repository }}/authz:sha-${{ github.sha }}
 
       - name: Build and push inventory image
         uses: docker/build-push-action@v6
@@ -43,7 +44,8 @@ jobs:
           context: .
           file: services/inventory/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/inventory:latest
+          tags: |
+            ghcr.io/${{ github.repository }}/inventory:sha-${{ github.sha }}
 
       - name: Build and push app image
         uses: docker/build-push-action@v6
@@ -51,9 +53,12 @@ jobs:
           context: .
           file: app/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/app:latest
+          tags: |
+            ghcr.io/${{ github.repository }}/app:sha-${{ github.sha }}
 
-      - name: Deploy manifests
+      - name: Update Kubernetes manifests with new image tags
         run: |
-          echo "Kubeconfig secret missing, running in dry-run mode"
-          kubectl apply --dry-run=client -k deploy/kubernetes
+          cd deploy/kubernetes
+          sed -i "s|image: ghcr.io/evalops/keep/authz:.*|image: ghcr.io/${{ github.repository }}/authz:sha-${{ github.sha }}|" authz-deployment.yaml
+          sed -i "s|image: ghcr.io/evalops/keep/inventory:.*|image: ghcr.io/${{ github.repository }}/inventory:sha-${{ github.sha }}|" inventory-deployment.yaml
+          sed -i "s|image: ghcr.io/evalops/keep/app:.*|image: ghcr.io/${{ github.repository }}/app:sha-${{ github.sha }}|" app-deployment.yaml

@@ -126,12 +126,11 @@ install-tools:
 		mv $(GOBIN)/opa.tmp $(GOBIN)/opa; \
 	fi
 	@echo "Installing Python tools..."
-	$(PIP_BIN) install black flake8 isort mypy
+	uv pip install --system black flake8 isort mypy
 
 setup-venv:
-	python3 -m venv $(VENV)
-	$(VENV_BIN)/python3 -m pip install --upgrade pip
-	$(VENV_BIN)/pip install -r app/requirements.txt
+	uv venv $(VENV)
+	uv pip install -r app/requirements.txt
 dev-bootstrap:
 	./scripts/dev-bootstrap.sh
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: inventory
-          image: ghcr.io/example/inventory:latest
+          image: ghcr.io/evalops/keep/inventory:latest
           env:
             - name: INVENTORY_ADDR
               value: ":8080"

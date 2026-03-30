@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: keep-app
-          image: ghcr.io/example/app:latest
+          image: ghcr.io/evalops/keep/app:latest
           env:
             - name: APP_ENV
               valueFrom:

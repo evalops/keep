@@ -5,5 +5,16 @@ __pycache__/
 .venv/
 venv/
 app/venv/
+
+# Go build artifacts
 agent/attestor-agent
 
+# Security scan artifacts
+*.sarif
+
+# Secrets and certificates
+.env
+certs/
+test-certs/
+*.pem
+*.key

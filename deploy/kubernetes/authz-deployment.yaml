@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: authz
-          image: ghcr.io/example/authz:latest
+          image: ghcr.io/evalops/keep/authz:latest
           env:
             - name: OPA_URL
               valueFrom:
@@ -37,14 +37,14 @@ spec:
             httpGet:
               path: /health
               port: 8443
-            scheme: HTTPS
+              scheme: HTTPS
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
               port: 8443
-            scheme: HTTPS
+              scheme: HTTPS
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
