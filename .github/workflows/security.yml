@@ -24,10 +24,7 @@ jobs:
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget
-          sudo wget -qO- https://github.com/aquasecurity/trivy/releases/latest/download/trivy_Linux-64bit.tar.gz | tar -xz --strip-components=1 -C /usr/local/bin trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
 
       - name: Run security scan script
         run: ./scripts/security-scan.sh
