@@ -215,7 +215,7 @@ func (c *Client) buildRequest(ctx context.Context, deviceID string) (*http.Reque
 func (c *Client) executeWithRetry(ctx context.Context, req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	retryErr := retry.Do(ctx, c.config.RetryConfig, func() error {
-		r, err := c.httpClient.Do(req)
+		r, err := c.httpClient.Do(req) // #nosec G704 -- URL is from validated config, not user input
 		if err != nil {
 			return err
 		}

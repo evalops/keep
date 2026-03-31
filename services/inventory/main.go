@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultBindAddr    = ":8080"
-	defaultDSN         = "postgres://postgres:postgres@postgres:5432/keep?sslmode=disable"
+	defaultDSN         = "postgres://postgres:postgres@postgres:5432/keep?sslmode=disable" // #nosec G101 -- dev-only default, overridden by env var in production
 	defaultTLSCert     = ""
 	defaultTLSKey      = ""
 	defaultAuthzJWKS   = ""
