@@ -5,7 +5,7 @@ GOLANGCI_LINT ?= $(GOBIN)/golangci-lint
 GOIMPORTS ?= $(GOBIN)/goimports
 GOVULNCHECK ?= $(GOBIN)/govulncheck
 GOSEC ?= $(GOBIN)/gosec
-OPA ?= $(GOBIN)/opa
+OPA ?= opa
 export PATH := $(GOBIN):$(PATH)
 
 .PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security
