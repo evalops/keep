@@ -1,6 +1,11 @@
 PROJECT_NAME := keep
-GOLANGCI_LINT ?= golangci-lint
+GOLANGCI_LINT_VERSION ?= 1.64.8
 GOBIN := $(shell go env GOPATH)/bin
+GOLANGCI_LINT ?= $(GOBIN)/golangci-lint
+GOIMPORTS ?= $(GOBIN)/goimports
+GOVULNCHECK ?= $(GOBIN)/govulncheck
+GOSEC ?= $(GOBIN)/gosec
+OPA ?= opa
 export PATH := $(GOBIN):$(PATH)
 
 .PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security
@@ -26,7 +31,7 @@ format: format-go format-python
 format-go:
 	@echo "Formatting Go code..."
 	go fmt ./...
-	goimports -w -local github.com/EvalOps/keep .
+	$(GOIMPORTS) -w -local github.com/EvalOps/keep .
 
 format-python:
 	@echo "Formatting Python code..."
@@ -65,7 +70,7 @@ db-migrate-status:
 	go run ./cmd/migrate -version
 
 opa-test:
-	opa test ./policies
+	$(OPA) test ./policies
 
 cert-refresh:
 	go run ./cmd/authz cert-refresh
@@ -74,7 +79,7 @@ cert-refresh:
 install-tools:
 	@echo "Installing Go tools..."
 	mkdir -p $(GOBIN)
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	GOPROXY=https://proxy.golang.org,direct go install github.com/golangci/golangci-lint/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION)
 	go install golang.org/x/tools/cmd/goimports@v0.36.0
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@v2.22.6
@@ -120,10 +125,10 @@ dev-bootstrap:
 
 check-tools:
 	@echo "Checking Go tools..."
-	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Run 'make install-tools'"; exit 1; }
-	@command -v goimports >/dev/null 2>&1 || { echo "goimports not found. Run 'make install-tools'"; exit 1; }
-	@command -v govulncheck >/dev/null 2>&1 || { echo "govulncheck not found. Run 'make install-tools'"; exit 1; }
-	@command -v gosec >/dev/null 2>&1 || { echo "gosec not found. Run 'make install-tools'"; exit 1; }
+	@test -x "$(GOLANGCI_LINT)" || { echo "golangci-lint not found at $(GOLANGCI_LINT). Run 'make install-tools'"; exit 1; }
+	@test -x "$(GOIMPORTS)" || { echo "goimports not found at $(GOIMPORTS). Run 'make install-tools'"; exit 1; }
+	@test -x "$(GOVULNCHECK)" || { echo "govulncheck not found at $(GOVULNCHECK). Run 'make install-tools'"; exit 1; }
+	@test -x "$(GOSEC)" || { echo "gosec not found at $(GOSEC). Run 'make install-tools'"; exit 1; }
 	@echo "Checking Python tools..."
 	@command -v black >/dev/null 2>&1 || { echo "black not found. Run 'make install-tools'"; exit 1; }
 	@command -v flake8 >/dev/null 2>&1 || { echo "flake8 not found. Run 'make install-tools'"; exit 1; }
@@ -134,11 +139,11 @@ check-tools:
 security:
 	@echo "Running govulncheck..."
 	@# govulncheck currently fails due to golang.org/x/sync/semaphore type info missing via github.com/jackc/puddle/v2
-	@if ! govulncheck ./...; then \
+	@if ! $(GOVULNCHECK) ./...; then \
 		echo "Warning: govulncheck encountered known issue (golang.org/x/sync/semaphore via github.com/jackc/puddle/v2); continuing"; \
 	fi
 	@echo "Running gosec..."
-	gosec ./...
+	$(GOSEC) ./...
 
 # CI/CD targets
 ci-lint: check-tools lint
