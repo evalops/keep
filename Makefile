@@ -8,9 +8,13 @@ GOSEC ?= $(GOBIN)/gosec
 OPA ?= opa
 export PATH := $(GOBIN):$(PATH)
 
-.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security
+.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks
 
 all: build
+
+install-hooks:
+	mkdir -p .git/hooks
+	install -m 0755 scripts/pre-commit .git/hooks/pre-commit
 
 tidy:
 	go mod tidy

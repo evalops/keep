@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+mapfile -t staged_go_files < <(git diff --cached --name-only --diff-filter=ACM -- "*.go")
+if [ ${#staged_go_files[@]} -eq 0 ]; then
+  exit 0
+fi
+
+stashed=0
+cleanup() {
+  if [ "$stashed" -eq 1 ]; then
+    git stash pop -q >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+if ! git diff --quiet -- . || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+  git stash push -q --keep-index --include-untracked -m "pre-commit-$(date +%s)"
+  stashed=1
+fi
+
+echo "Running gofmt on staged files..."
+gofmt -w "${staged_go_files[@]}"
+git add -- "${staged_go_files[@]}"
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+  echo "golangci-lint is required for this repo. Install it and retry." >&2
+  exit 1
+fi
+
+echo "Running golangci-lint..."
+golangci-lint run ./...
+
+echo "Running go test..."
+go test ./...
