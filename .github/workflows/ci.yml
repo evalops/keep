@@ -82,13 +82,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       - name: Install Python dependencies
         run: |
-          uv venv .venv
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          uv pip install -r app/requirements.txt
+          uv pip install --system -r app/requirements.txt
           make install-tools
 
       - name: Wait for database
