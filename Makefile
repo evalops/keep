@@ -8,7 +8,7 @@ GOSEC ?= $(GOBIN)/gosec
 OPA ?= opa
 export PATH := $(GOBIN):$(PATH)
 
-.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks
+.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks install-tools install-format-tools install-lint-tools install-security-tools install-opa check-tools check-format-tools check-lint-tools check-test-tools
 
 all: build
 
@@ -80,14 +80,31 @@ cert-refresh:
 	go run ./cmd/authz cert-refresh
 
 # Tool installation and checks
-install-tools:
-	@echo "Installing Go tools..."
+install-tools: install-format-tools install-lint-tools install-security-tools install-opa
+
+install-format-tools:
+	@echo "Installing format tools..."
+	mkdir -p $(GOBIN)
+	go install golang.org/x/tools/cmd/goimports@v0.36.0
+	uv tool install black
+	uv tool install isort
+
+install-lint-tools:
+	@echo "Installing lint tools..."
 	mkdir -p $(GOBIN)
 	GOPROXY=https://proxy.golang.org,direct go install github.com/golangci/golangci-lint/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION)
-	go install golang.org/x/tools/cmd/goimports@v0.36.0
+	uv tool install flake8
+	uv tool install mypy
+
+install-security-tools:
+	@echo "Installing security tools..."
+	mkdir -p $(GOBIN)
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	go install github.com/securego/gosec/v2/cmd/gosec@v2.22.6
+
+install-opa:
 	@echo "Ensuring OPA CLI is available..."
+	mkdir -p $(GOBIN)
 	@NEED_OPA=1; \
 	if command -v opa >/dev/null 2>&1; then \
 		if opa version >/dev/null 2>&1; then \
@@ -115,11 +132,6 @@ install-tools:
 		chmod +x $(GOBIN)/opa.tmp; \
 		mv $(GOBIN)/opa.tmp $(GOBIN)/opa; \
 	fi
-	@echo "Installing Python tools..."
-	uv tool install black
-	uv tool install flake8
-	uv tool install isort
-	uv tool install mypy
 
 setup-venv:
 	uv venv $(VENV)
@@ -140,6 +152,18 @@ check-tools:
 	@command -v mypy >/dev/null 2>&1 || { echo "mypy not found. Run 'make install-tools'"; exit 1; }
 	@echo "All tools are available!"
 
+check-format-tools:
+	@command -v black >/dev/null 2>&1 || { echo "black not found. Run 'make install-format-tools'"; exit 1; }
+	@command -v isort >/dev/null 2>&1 || { echo "isort not found. Run 'make install-format-tools'"; exit 1; }
+
+check-lint-tools:
+	@test -x "$(GOLANGCI_LINT)" || { echo "golangci-lint not found at $(GOLANGCI_LINT). Run 'make install-lint-tools'"; exit 1; }
+	@command -v flake8 >/dev/null 2>&1 || { echo "flake8 not found. Run 'make install-lint-tools'"; exit 1; }
+	@command -v mypy >/dev/null 2>&1 || { echo "mypy not found. Run 'make install-lint-tools'"; exit 1; }
+
+check-test-tools:
+	@command -v pytest >/dev/null 2>&1 || { echo "pytest not found. Install app requirements first"; exit 1; }
+
 security:
 	@echo "Running govulncheck..."
 	@# govulncheck currently fails due to golang.org/x/sync/semaphore type info missing via github.com/jackc/puddle/v2
@@ -150,9 +174,9 @@ security:
 	$(GOSEC) ./...
 
 # CI/CD targets
-ci-lint: check-tools lint
-ci-test: check-tools test
-ci-format-check: check-tools
+ci-lint: check-lint-tools lint
+ci-test: check-test-tools test
+ci-format-check: check-format-tools
 	@echo "Checking Go formatting..."
 	@if [ "$$(gofmt -l . | wc -l)" -ne 0 ]; then echo "Go files need formatting. Run 'make format-go'"; exit 1; fi
 	@echo "Checking Python formatting..."
