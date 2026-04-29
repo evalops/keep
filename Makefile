@@ -8,7 +8,7 @@ GOSEC ?= $(GOBIN)/gosec
 OPA ?= opa
 export PATH := $(GOBIN):$(PATH)
 
-.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks install-tools install-format-tools install-lint-tools install-security-tools install-opa check-tools check-format-tools
+.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks install-tools install-format-tools install-lint-tools install-security-tools install-opa check-tools check-format-tools check-lint-tools check-test-tools
 
 all: build
 
@@ -156,6 +156,14 @@ check-format-tools:
 	@command -v black >/dev/null 2>&1 || { echo "black not found. Run 'make install-format-tools'"; exit 1; }
 	@command -v isort >/dev/null 2>&1 || { echo "isort not found. Run 'make install-format-tools'"; exit 1; }
 
+check-lint-tools:
+	@test -x "$(GOLANGCI_LINT)" || { echo "golangci-lint not found at $(GOLANGCI_LINT). Run 'make install-lint-tools'"; exit 1; }
+	@command -v flake8 >/dev/null 2>&1 || { echo "flake8 not found. Run 'make install-lint-tools'"; exit 1; }
+	@command -v mypy >/dev/null 2>&1 || { echo "mypy not found. Run 'make install-lint-tools'"; exit 1; }
+
+check-test-tools:
+	@command -v pytest >/dev/null 2>&1 || { echo "pytest not found. Install app requirements first"; exit 1; }
+
 security:
 	@echo "Running govulncheck..."
 	@# govulncheck currently fails due to golang.org/x/sync/semaphore type info missing via github.com/jackc/puddle/v2
@@ -166,8 +174,8 @@ security:
 	$(GOSEC) ./...
 
 # CI/CD targets
-ci-lint: check-tools lint
-ci-test: check-tools test
+ci-lint: check-lint-tools lint
+ci-test: check-test-tools test
 ci-format-check: check-format-tools
 	@echo "Checking Go formatting..."
 	@if [ "$$(gofmt -l . | wc -l)" -ne 0 ]; then echo "Go files need formatting. Run 'make format-go'"; exit 1; fi
