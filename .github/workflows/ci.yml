@@ -31,8 +31,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
-      - name: Install toolchains
-        run: make install-tools
+      - name: Install lint and format tooling
+        run: make install-format-tools install-lint-tools
 
       - name: Format check
         run: make ci-format-check
@@ -87,12 +87,13 @@ jobs:
       - name: Install Python dependencies
         run: |
           uv pip install --system -r app/requirements.txt
-          make install-tools
+          make install-opa
 
       - name: Wait for database
         run: |
-          for i in {1..30}; do
+          for attempt in {1..30}; do
             pg_isready -h 127.0.0.1 -p 5432 -U postgres -d app_test && exit 0
+            echo "Waiting for Postgres ($attempt/30)..."
             sleep 1
           done
           echo "Postgres did not become ready" >&2
@@ -121,11 +122,8 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
       - name: Prepare tooling
-        run: make install-tools
+        run: make install-security-tools
 
       - name: Run security checks
         run: make security
@@ -190,16 +188,3 @@ jobs:
           
           # Start services briefly to test startup
           timeout 30s docker compose -f docker-compose.secure.yml up --abort-on-container-exit || true
-
-  opa-policy-test:
-    name: Test OPA Policies
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup OPA
-        uses: open-policy-agent/setup-opa@v2
-
-      - name: Run policy tests
-        run: make opa-test
