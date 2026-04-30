@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import sys
 import time
+from typing import Literal
 import urllib.error
 import urllib.request
 
@@ -56,7 +57,7 @@ def is_code_scanning_disabled_error(status_code: int, response_body: str) -> boo
     )
 
 
-def handle_code_scanning_http_error(error: urllib.error.HTTPError) -> bool:
+def handle_code_scanning_http_error(error: urllib.error.HTTPError) -> Literal[True]:
     response_body = error.read().decode("utf-8")
     if is_code_scanning_disabled_error(error.code, response_body):
         print("::warning::Code Security is not enabled; skipping SARIF upload.")
@@ -166,8 +167,8 @@ def wait_for_sarif_processing(sarif_id: str) -> None:
             with urllib.request.urlopen(request) as response:
                 status_body = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as error:
-            if handle_code_scanning_http_error(error):
-                return
+            handle_code_scanning_http_error(error)
+            return
         processing_status = status_body.get("processing_status")
         if processing_status == "complete":
             print(json.dumps(status_body))
@@ -204,8 +205,8 @@ def main() -> int:
             response_body = json.loads(response.read().decode("utf-8"))
             print(json.dumps(response_body))
     except urllib.error.HTTPError as error:
-        if handle_code_scanning_http_error(error):
-            return 0
+        handle_code_scanning_http_error(error)
+        return 0
     sarif_id = response_body.get("id")
     if sarif_id:
         wait_for_sarif_processing(str(sarif_id))
