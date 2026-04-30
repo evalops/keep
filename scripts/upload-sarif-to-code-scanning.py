@@ -101,8 +101,29 @@ def result_fingerprint(result: dict[str, object], run: dict[str, object]) -> str
     return hashlib.sha256(encoded).hexdigest()
 
 
-def sarif_upload_bytes(path: Path) -> bytes:
+def apply_category(sarif: dict[str, object], category: str | None) -> None:
+    if not category:
+        return
+    runs = sarif.get("runs", [])
+    if not isinstance(runs, list):
+        return
+    for index, run in enumerate(runs):
+        if not isinstance(run, dict):
+            continue
+        automation_details = run.setdefault("automationDetails", {})
+        if not isinstance(automation_details, dict):
+            automation_details = {}
+            run["automationDetails"] = automation_details
+        if automation_details.get("id"):
+            continue
+        automation_details["id"] = (
+            category if len(runs) == 1 else f"{category}/run-{index + 1}"
+        )
+
+
+def sarif_upload_bytes(path: Path, category: str | None) -> bytes:
     sarif = json.loads(path.read_text(encoding="utf-8"))
+    apply_category(sarif, category)
     for run in sarif.get("runs", []):
         if not isinstance(run, dict):
             continue
@@ -142,7 +163,7 @@ def wait_for_sarif_processing(sarif_id: str) -> None:
 def main() -> int:
     args = parse_args()
     sarif_payload = base64.b64encode(
-        gzip.compress(sarif_upload_bytes(args.sarif_file))
+        gzip.compress(sarif_upload_bytes(args.sarif_file, args.category))
     ).decode("ascii")
 
     body = {
@@ -151,8 +172,6 @@ def main() -> int:
         "sarif": sarif_payload,
         "checkout_uri": f"file://{os.environ['GITHUB_WORKSPACE']}",
     }
-    if args.category:
-        body["category"] = args.category
 
     request = urllib.request.Request(
         f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/code-scanning/sarifs",
@@ -164,9 +183,6 @@ def main() -> int:
         with urllib.request.urlopen(request) as response:
             response_body = json.loads(response.read().decode("utf-8"))
             print(json.dumps(response_body))
-        sarif_id = response_body.get("id")
-        if sarif_id:
-            wait_for_sarif_processing(str(sarif_id))
     except urllib.error.HTTPError as error:
         response_body = error.read().decode("utf-8")
         response_body_lower = response_body.lower()
@@ -179,6 +195,9 @@ def main() -> int:
             return 0
         sys.stderr.write(response_body)
         raise
+    sarif_id = response_body.get("id")
+    if sarif_id:
+        wait_for_sarif_processing(str(sarif_id))
     return 0
 
 
