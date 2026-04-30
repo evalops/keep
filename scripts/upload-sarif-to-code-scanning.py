@@ -47,6 +47,24 @@ def request_headers() -> dict[str, str]:
     }
 
 
+def is_code_scanning_disabled_error(status_code: int, response_body: str) -> bool:
+    response_body_lower = response_body.lower()
+    return status_code == 403 and (
+        "advanced security must be enabled" in response_body_lower
+        or "code scanning is not enabled" in response_body_lower
+        or "code security must be enabled" in response_body_lower
+    )
+
+
+def handle_code_scanning_http_error(error: urllib.error.HTTPError) -> bool:
+    response_body = error.read().decode("utf-8")
+    if is_code_scanning_disabled_error(error.code, response_body):
+        print("::warning::Code Security is not enabled; skipping SARIF upload.")
+        return True
+    sys.stderr.write(response_body)
+    raise error
+
+
 def artifact_uri(run: dict[str, object], artifact_location: object) -> object:
     if not isinstance(artifact_location, dict):
         return None
@@ -116,9 +134,7 @@ def apply_category(sarif: dict[str, object], category: str | None) -> None:
             run["automationDetails"] = automation_details
         if automation_details.get("id"):
             continue
-        automation_details["id"] = (
-            category if len(runs) == 1 else f"{category}/run-{index + 1}"
-        )
+        automation_details["id"] = category if len(runs) == 1 else f"{category}/run-{index + 1}"
 
 
 def sarif_upload_bytes(path: Path, category: str | None) -> bytes:
@@ -146,8 +162,12 @@ def wait_for_sarif_processing(sarif_id: str) -> None:
     )
     while True:
         request = urllib.request.Request(status_url, headers=request_headers())
-        with urllib.request.urlopen(request) as response:
-            status_body = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request) as response:
+                status_body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            if handle_code_scanning_http_error(error):
+                return
         processing_status = status_body.get("processing_status")
         if processing_status == "complete":
             print(json.dumps(status_body))
@@ -184,17 +204,8 @@ def main() -> int:
             response_body = json.loads(response.read().decode("utf-8"))
             print(json.dumps(response_body))
     except urllib.error.HTTPError as error:
-        response_body = error.read().decode("utf-8")
-        response_body_lower = response_body.lower()
-        if error.code == 403 and (
-            "advanced security must be enabled" in response_body_lower
-            or "code scanning is not enabled" in response_body_lower
-            or "code security must be enabled" in response_body_lower
-        ):
-            print("::warning::Code Security is not enabled; skipping SARIF upload.")
+        if handle_code_scanning_http_error(error):
             return 0
-        sys.stderr.write(response_body)
-        raise
     sarif_id = response_body.get("id")
     if sarif_id:
         wait_for_sarif_processing(str(sarif_id))
