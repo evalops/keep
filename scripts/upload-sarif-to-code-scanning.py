@@ -164,9 +164,6 @@ def main() -> int:
         with urllib.request.urlopen(request) as response:
             response_body = json.loads(response.read().decode("utf-8"))
             print(json.dumps(response_body))
-        sarif_id = response_body.get("id")
-        if sarif_id:
-            wait_for_sarif_processing(str(sarif_id))
     except urllib.error.HTTPError as error:
         response_body = error.read().decode("utf-8")
         response_body_lower = response_body.lower()
@@ -179,6 +176,9 @@ def main() -> int:
             return 0
         sys.stderr.write(response_body)
         raise
+    sarif_id = response_body.get("id")
+    if sarif_id:
+        wait_for_sarif_processing(str(sarif_id))
     return 0
 
 
