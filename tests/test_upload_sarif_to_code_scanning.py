@@ -28,7 +28,7 @@ def test_polling_http_error_can_skip_when_code_scanning_is_disabled(capsys):
         io.BytesIO(b'{"message":"Code scanning is not enabled"}'),
     )
 
-    assert module.handle_code_scanning_http_error(error)
+    assert module.handle_code_scanning_http_error(error) is None
     assert "Code Security is not enabled" in capsys.readouterr().out
 
 
