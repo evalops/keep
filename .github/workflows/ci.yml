@@ -132,10 +132,10 @@ jobs:
         run: gosec -fmt sarif -out gosec.sarif ./...
 
       - name: Upload gosec results
-        uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true
-        with:
-          sarif_file: gosec.sarif
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/upload-sarif-to-code-scanning.py --sarif-file gosec.sarif --category gosec
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -146,10 +146,10 @@ jobs:
           output: 'trivy-results.sarif'
 
       - name: Upload Trivy results
-        uses: github/codeql-action/upload-sarif@v4
         continue-on-error: true
-        with:
-          sarif_file: 'trivy-results.sarif'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/upload-sarif-to-code-scanning.py --sarif-file trivy-results.sarif --category trivy
 
   build:
     name: Build and Test Docker Images
