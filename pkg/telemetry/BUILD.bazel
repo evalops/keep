@@ -1,0 +1,24 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "telemetry",
+    srcs = [
+        "config.go",
+        "http.go",
+        "metrics.go",
+        "telemetry.go",
+    ],
+    importpath = "github.com/EvalOps/keep/pkg/telemetry",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/metrics",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp//:otelhttp",
+        "@io_opentelemetry_go_otel//:otel",
+        "@io_opentelemetry_go_otel//attribute",
+        "@io_opentelemetry_go_otel//propagation",
+        "@io_opentelemetry_go_otel_exporters_otlp_otlptrace_otlptracehttp//:otlptracehttp",
+        "@io_opentelemetry_go_otel_sdk//resource",
+        "@io_opentelemetry_go_otel_sdk//trace",
+    ],
+)

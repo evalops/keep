@@ -6,9 +6,15 @@ GOIMPORTS ?= $(GOBIN)/goimports
 GOVULNCHECK ?= $(GOBIN)/govulncheck
 GOSEC ?= $(GOBIN)/gosec
 OPA ?= opa
+BAZEL ?= $(shell if command -v bazelisk >/dev/null 2>&1; then command -v bazelisk; elif command -v go >/dev/null 2>&1; then printf '%s/bin/bazelisk' "$$(go env GOPATH)"; else printf bazelisk; fi)
+BUILDIFIER ?= $(shell if command -v buildifier >/dev/null 2>&1; then command -v buildifier; elif command -v go >/dev/null 2>&1; then printf '%s/bin/buildifier' "$$(go env GOPATH)"; else printf buildifier; fi)
+BAZEL_TARGETS ?= //...
+BAZEL_REMOTE_CONFIG ?= remote-gcp-dev
+BAZEL_RBE_SMOKE_TARGETS ?= //agent/internal/posture:posture_test //agent/internal/service:service_test //pkg/pki:pki_test //services/authz/server:server_test //services/authz/token:token_test //services/inventory/server:server_test
+BAZEL_CI_REMOTE_DOWNLOAD_FLAGS ?= --remote_download_outputs=minimal
 export PATH := $(GOBIN):$(PATH)
 
-.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks install-tools install-format-tools install-lint-tools install-security-tools install-opa check-tools check-format-tools check-lint-tools check-test-tools
+.PHONY: all tidy build test lint format lint-go lint-python format-go format-python docker-up docker-down docker-logs db-migrate opa-test cert-refresh setup-venv security install-hooks install-tools install-format-tools install-lint-tools install-security-tools install-opa check-tools check-format-tools check-lint-tools check-test-tools bazel-check bazel-format bazel-gazelle bazel-mod-tidy bazel-rbe-smoke bazel-test bazel-test-remote
 
 all: build
 
@@ -25,6 +31,30 @@ build:
 test:
 	go test ./...
 	pytest
+
+bazel-mod-tidy:
+	$(BAZEL) mod tidy
+
+bazel-gazelle:
+	$(BAZEL) run //:gazelle
+
+bazel-format:
+	$(BUILDIFIER) -r .
+
+bazel-check:
+	$(MAKE) bazel-mod-tidy
+	$(MAKE) bazel-gazelle
+	$(MAKE) bazel-format
+	git diff --exit-code
+
+bazel-test:
+	$(BAZEL) test $(BAZEL_TARGETS)
+
+bazel-test-remote:
+	$(BAZEL) test --config=$(BAZEL_REMOTE_CONFIG) $(BAZEL_TARGETS)
+
+bazel-rbe-smoke:
+	scripts/run-bazel-rbe.sh -- $(BAZEL) test --config=$(BAZEL_REMOTE_CONFIG) $(BAZEL_CI_REMOTE_DOWNLOAD_FLAGS) $(BAZEL_RBE_SMOKE_TARGETS)
 
 smoke:
 	COMPOSE_FILE=docker-compose.yml ./scripts/smoke-tests.sh

@@ -1,0 +1,8 @@
+.git
+.local
+.tools
+.worktrees
+bazel-bin
+bazel-keep
+bazel-out
+bazel-testlogs

@@ -1,0 +1,14 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "token",
+    srcs = ["google.go"],
+    importpath = "github.com/EvalOps/keep/services/authz/token",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "token_test",
+    srcs = ["google_test.go"],
+    embed = [":token"],
+)

@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "logging",
+    srcs = ["logger.go"],
+    importpath = "github.com/EvalOps/keep/pkg/logging",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_rs_zerolog//:zerolog",
+        "@com_github_rs_zerolog//log",
+        "@io_opentelemetry_go_otel_trace//:trace",
+    ],
+)

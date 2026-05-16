@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "attestor-agent_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/EvalOps/keep/agent/cmd/attestor-agent",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//agent/internal/posture",
+        "//agent/internal/service",
+        "//pkg/logging",
+        "@com_github_rs_zerolog//:zerolog",
+    ],
+)
+
+go_binary(
+    name = "attestor-agent",
+    embed = [":attestor-agent_lib"],
+    visibility = ["//visibility:public"],
+)

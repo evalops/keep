@@ -1,0 +1,13 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "mfa",
+    srcs = ["server.go"],
+    importpath = "github.com/EvalOps/keep/services/mfa",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_go_chi_chi_v5//:chi",
+        "@com_github_go_chi_chi_v5//middleware",
+        "@com_github_rs_zerolog//log",
+    ],
+)

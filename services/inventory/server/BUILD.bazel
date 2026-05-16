@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "server",
+    srcs = ["server.go"],
+    importpath = "github.com/EvalOps/keep/services/inventory/server",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/logging",
+        "//pkg/telemetry",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@com_github_go_chi_chi_v5//middleware",
+        "@com_github_jackc_pgx_v5//stdlib",
+    ],
+)
+
+go_test(
+    name = "server_test",
+    srcs = ["server_test.go"],
+    embed = [":server"],
+)

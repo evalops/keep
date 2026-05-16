@@ -1,0 +1,20 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "pki",
+    srcs = [
+        "ca.go",
+        "device.go",
+    ],
+    importpath = "github.com/EvalOps/keep/pkg/pki",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "pki_test",
+    srcs = [
+        "ca_test.go",
+        "device_test.go",
+    ],
+    embed = [":pki"],
+)

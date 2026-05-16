@@ -1,0 +1,101 @@
+load("@rules_cc//cc:defs.bzl", "cc_toolchain")
+load("@rules_cc//cc/private/toolchain:unix_cc_toolchain_config.bzl", "cc_toolchain_config")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "empty",
+    srcs = [],
+)
+
+cc_toolchain_config(
+    name = "linux_amd64_gcc_config",
+    abi_libc_version = "glibc",
+    abi_version = "local",
+    compile_flags = [
+        "-U_FORTIFY_SOURCE",
+        "-fstack-protector",
+        "-Wall",
+        "-Wunused-but-set-parameter",
+        "-Wno-free-nonheap-object",
+        "-fno-omit-frame-pointer",
+    ],
+    compiler = "gcc",
+    cpu = "k8",
+    cxx_builtin_include_directories = [
+        "/usr/include/c++/13",
+        "/usr/include/x86_64-linux-gnu/c++/13",
+        "/usr/include/c++/13/backward",
+        "/usr/lib/gcc/x86_64-linux-gnu/13/include",
+        "/usr/local/include",
+        "/usr/include/x86_64-linux-gnu",
+        "/usr/include",
+    ],
+    cxx_flags = ["-std=c++17"],
+    dbg_compile_flags = ["-g"],
+    host_system_name = "local",
+    link_libs = [
+        "-lstdc++",
+        "-lm",
+    ],
+    opt_compile_flags = [
+        "-g0",
+        "-O2",
+        "-D_FORTIFY_SOURCE=1",
+        "-DNDEBUG",
+        "-ffunction-sections",
+        "-fdata-sections",
+    ],
+    supports_start_end_lib = True,
+    target_libc = "glibc",
+    target_system_name = "local",
+    tool_paths = {
+        "ar": "/usr/bin/ar",
+        "cpp": "/usr/bin/cpp",
+        "dwp": "/usr/bin/dwp",
+        "gcc": "/usr/bin/gcc",
+        "gcov": "/usr/bin/gcov",
+        "ld": "/usr/bin/ld",
+        "nm": "/usr/bin/nm",
+        "objcopy": "/usr/bin/objcopy",
+        "objdump": "/usr/bin/objdump",
+        "strip": "/usr/bin/strip",
+    },
+    toolchain_identifier = "linux_amd64_gcc",
+    unfiltered_compile_flags = [
+        "-no-canonical-prefixes",
+        "-Wno-builtin-macro-redefined",
+        "-D__DATE__=\"redacted\"",
+        "-D__TIMESTAMP__=\"redacted\"",
+        "-D__TIME__=\"redacted\"",
+    ],
+)
+
+cc_toolchain(
+    name = "linux_amd64_gcc",
+    all_files = ":empty",
+    ar_files = ":empty",
+    as_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = True,
+    toolchain_config = ":linux_amd64_gcc_config",
+    toolchain_identifier = "linux_amd64_gcc",
+)
+
+toolchain(
+    name = "linux_amd64_gcc_toolchain",
+    exec_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+    toolchain = ":linux_amd64_gcc",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+)

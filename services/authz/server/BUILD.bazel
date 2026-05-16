@@ -1,0 +1,40 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "server",
+    srcs = [
+        "clients.go",
+        "config.go",
+        "devices.go",
+        "handlers.go",
+        "server.go",
+        "tailscale.go",
+    ],
+    importpath = "github.com/EvalOps/keep/services/authz/server",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/logging",
+        "//pkg/metrics",
+        "//pkg/pki",
+        "//pkg/retry",
+        "//pkg/telemetry",
+        "//pkg/vouch",
+        "//services/authz/token",
+        "@com_github_go_chi_chi_v5//:chi",
+        "@com_github_go_chi_chi_v5//middleware",
+        "@com_github_prometheus_client_golang//prometheus/promhttp",
+        "@com_github_rs_zerolog//:zerolog",
+        "@com_tailscale//tsnet",
+    ],
+)
+
+go_test(
+    name = "server_test",
+    srcs = ["server_test.go"],
+    embed = [":server"],
+    deps = [
+        "//pkg/pki",
+        "//pkg/retry",
+        "@com_tailscale//tsnet",
+    ],
+)
