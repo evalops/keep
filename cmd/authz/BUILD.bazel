@@ -1,0 +1,19 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "authz_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/EvalOps/keep/cmd/authz",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//pkg/logging",
+        "//pkg/secrets",
+        "//services/authz/server",
+    ],
+)
+
+go_binary(
+    name = "authz",
+    embed = [":authz_lib"],
+    visibility = ["//visibility:public"],
+)

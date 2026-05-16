@@ -1,0 +1,12 @@
+load("@rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "vouch",
+    srcs = ["client.go"],
+    importpath = "github.com/EvalOps/keep/pkg/vouch",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/retry",
+        "//pkg/telemetry",
+    ],
+)

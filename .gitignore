@@ -8,6 +8,10 @@ app/venv/
 
 # Go build artifacts
 agent/attestor-agent
+bazel-bin
+bazel-keep
+bazel-out
+bazel-testlogs
 
 # Security scan artifacts
 *.sarif

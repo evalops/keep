@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "posture",
+    srcs = [
+        "constants.go",
+        "default.go",
+        "linux.go",
+        "macos.go",
+        "posture.go",
+        "windows.go",
+    ],
+    importpath = "github.com/EvalOps/keep/agent/internal/posture",
+    visibility = ["//agent:__subpackages__"],
+)
+
+go_test(
+    name = "posture_test",
+    srcs = ["posture_test.go"],
+    embed = [":posture"],
+)

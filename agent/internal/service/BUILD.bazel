@@ -1,0 +1,21 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "service",
+    srcs = ["service.go"],
+    importpath = "github.com/EvalOps/keep/agent/internal/service",
+    visibility = ["//agent:__subpackages__"],
+    deps = [
+        "//agent/internal/posture",
+        "//pkg/logging",
+        "//pkg/pki",
+        "@com_github_rs_zerolog//:zerolog",
+    ],
+)
+
+go_test(
+    name = "service_test",
+    srcs = ["service_test.go"],
+    embed = [":service"],
+    deps = ["//agent/internal/posture"],
+)
