@@ -1,6 +1,6 @@
 module github.com/EvalOps/keep
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.1
@@ -21,7 +21,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.43.0
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
-	tailscale.com v1.98.1
+	tailscale.com v1.98.2
 )
 
 require (
