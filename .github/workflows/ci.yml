@@ -111,7 +111,6 @@ jobs:
     permissions:
       actions: read
       contents: read
-      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -127,29 +126,6 @@ jobs:
 
       - name: Run security checks
         run: make security
-
-      - name: Run gosec with SARIF output
-        run: gosec -fmt sarif -out gosec.sarif ./...
-
-      - name: Upload gosec results
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/upload-sarif-to-code-scanning.py --sarif-file gosec.sarif --category gosec
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy results
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/upload-sarif-to-code-scanning.py --sarif-file trivy-results.sarif --category trivy
 
   build:
     name: Build and Test Docker Images
