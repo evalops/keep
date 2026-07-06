@@ -6,7 +6,7 @@
 > It is **NOT intended for production use** and may contain security vulnerabilities, incomplete features,
 > and other issues. Use at your own risk in development/testing environments only.
 
-This repository implements an end-to-end zero-trust access proxy with device posture attestation. The stack integrates with [Vouch](https://github.com/haasonsaas/vouch) for device posture collection.
+Keep is an end-to-end zero-trust access proxy with device posture attestation. It fronts a backend application with Envoy, verifies Google-issued ID tokens, checks device posture via an inventory service (optionally backed by [Vouch](https://github.com/haasonsaas/vouch)), and delegates authorization decisions to OPA policies written in Rego.
 
 ## Architecture Overview
 
@@ -34,32 +34,46 @@ Google SSO (JWT + JWKS) -----> Authz Service (Go) -----> OPA (Policies)
 ## Key Components
 
 ### Core Services
+
+| Service | Entrypoint | Default Port | Description |
+|---------|-----------|-------------|-------------|
+| Authz | `cmd/authz` | `:8443` (HTTP), `:8444` (gRPC) | Verifies Google JWTs, queries inventory for device posture, consults OPA for authorization decisions, and issues short-lived device certificates via CSR. |
+| Inventory | `cmd/inventory` | `:8080` | Device registry backed by Postgres. Manages device registration, posture updates, and metadata. |
+| MFA | `cmd/mfa` | `:8445` | TOTP-based step-up MFA service with challenge/verify flows and session management. |
+| Migrate | `cmd/migrate` | — | Database migration CLI (`-direction=up` / `-direction=down`). |
+| Secrets | `cmd/secrets` | — | Secret management CLI supporting `get`, `set`, `list`, `migrate`, and `init` operations across multiple backends. |
+
+### Supporting Infrastructure
+
 - **Envoy Proxy**: Fronts the application, validates Google-issued ID tokens via the authz service, and establishes mTLS to the backend.
-- **Authz Service (Go)**: Verifies Google JWTs, queries Vouch for device posture, and consults OPA for authorization decisions.
-- **Vouch Integration**: Device posture attestation with trust score calculation and monitoring.
+- **Vouch Integration**: Device posture attestation with trust score calculation and monitoring (`pkg/vouch`).
 - **OPA**: Policy engine with role-based access control and device context.
-- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access.
+- **Protected Application (Flask)**: Simple dashboard demonstrating mTLS-protected backend access (`app/`).
+- **Attestor Agent**: Device posture collection agent with cross-platform support (Linux, macOS, Windows) and certificate lifecycle management (`agent/`).
 
 ### Security Features
+
 - **Device Context**: OS info, encryption status, firewall state, EDR health, update status, secure boot, TPM presence
-- **Trust Score**: 0-100 scoring based on security posture
+- **Trust Score**: 0–100 scoring based on security posture (healthy ≥ 80, compliant ≥ 60, warning ≥ 40, critical < 40)
 - **Role-Based Policies**: Different requirements for admin, engineering, and contractor access
 - **Time-Based Controls**: Contractor access limited to business hours
-- **Step-Up MFA**: Required for devices with lower trust scores
-- **Periodic Attestation**: 5-minute posture updates
+- **Step-Up MFA**: Required for devices with lower trust scores, served by the dedicated MFA service
+- **Periodic Attestation**: Configurable posture update intervals (default 5 minutes)
 - **Signed Reports**: Ed25519-signed device reports
+- **Secret Management**: Pluggable backends — environment variables (dev), AWS SSM, HashiCorp Vault, and Azure Key Vault (see `docs/SECRET_MANAGEMENT.md`)
 
 ## Getting Started
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Go 1.22+
+- Go 1.26+
 - Python 3.12+
+- OPA CLI (for policy testing)
 
 ### Configuration
 
-Create a `.env` file (or export environment variables) with:
+Copy `.env.example` to `.env` and configure:
 
 ```
 GOOGLE_CLIENT_ID=your-oauth-client-id.apps.googleusercontent.com
@@ -74,6 +88,26 @@ VOUCH_RETRY_ENABLED=true
 VOUCH_CIRCUIT_BREAKER=true
 ```
 
+For secret management in non-dev environments, configure one backend (see `docs/SECRET_MANAGEMENT.md` for full details):
+
+```
+# AWS Systems Manager Parameter Store
+SECRET_MANAGER_TYPE=ssm
+SECRET_MANAGER_REGION=us-west-2
+SECRET_MANAGER_PREFIX=/keep/production/
+
+# HashiCorp Vault
+SECRET_MANAGER_TYPE=vault
+VAULT_ADDR=https://vault.company.com:8200
+VAULT_TOKEN_FILE=/var/secrets/vault-token
+VAULT_SECRET_PATH=secret/keep/production
+
+# Azure Key Vault
+SECRET_MANAGER_TYPE=azure
+AZURE_KEYVAULT_URL=https://keep-vault.vault.azure.net/
+AZURE_CLIENT_ID=your-service-principal-id
+```
+
 For local testing without real Google OAuth, you can use a service account to mint test JWTs signed with a private key and corresponding JWKS.
 
 ### Bootstrapping Certificates
@@ -86,17 +120,35 @@ make cert-refresh
 
 ### Running the Stack
 
+**Basic (no mTLS between services):**
+
 ```
 docker compose up --build
 ```
 
+**Secure (with mTLS and MFA service):**
+
+```
+docker compose -f docker-compose.secure.yml up --build
+```
+
+Or via Make:
+
+```
+make docker-up        # docker compose up --build -d
+make docker-down      # docker compose down
+```
+
 Services exposed:
 
-- Envoy: `https://localhost:8080`
-- Authz service: `https://localhost:8443`
-- Inventory service: `http://localhost:8081`
-- OPA: `http://localhost:8181`
-- Flask app: behind Envoy; direct access disabled
+| Service | URL | Notes |
+|---------|-----|-------|
+| Envoy | `https://localhost:8080` | Front-door; all external access goes through here |
+| Authz | `https://localhost:8443` | HTTP API; gRPC on `:8444` |
+| Inventory | `http://localhost:8080` | Not host-exposed in basic compose; accessible internally |
+| MFA | `http://localhost:8445` | Only in `docker-compose.secure.yml` |
+| OPA | `http://localhost:8181` | Policy engine |
+| Flask app | Behind Envoy | Direct access disabled |
 
 Short health check of the Docker stack:
 
@@ -106,18 +158,53 @@ make smoke
 
 This invokes `scripts/smoke-tests.sh`, which builds containers, waits for readiness, curls `/health` for each service, and performs cleanup.
 
+### API Endpoints
+
+**Authz service:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/metrics` | Prometheus metrics |
+| `POST` | `/v1/auth/verify` | Verify token + device posture, return authorization decision |
+| `POST` | `/v1/auth/check` | Envoy ext-authz check endpoint |
+| `POST` | `/v1/auth/mfa/verify-envoy` | Envoy MFA verification |
+| `POST` | `/v1/certs/device` | Issue device certificate via CSR |
+| `GET` | `/v1/certs/ca` | Retrieve CA certificate |
+| `GET` | `/v1/tailscale/status` | Tailscale integration status |
+
+**Inventory service:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/v1/devices` | List all devices |
+| `POST` | `/v1/devices` | Register a new device |
+| `GET` | `/v1/devices/{deviceID}` | Get device details |
+| `PUT` | `/v1/devices/{deviceID}` | Update device metadata |
+| `POST` | `/v1/devices/{deviceID}/posture` | Update device posture |
+
+**MFA service:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/mfa/challenge` | Start MFA challenge, get session ID |
+| `POST` | `/mfa/verify` | Verify MFA code for session |
+| `GET` | `/mfa/status/{sessionID}` | Check MFA session status |
+
 ### Device Registration Flow
 
-1. The device agent generates a key pair and CSR and posts it to the authz service to obtain a short-lived client certificate.
-2. The agent registers the device with the inventory service (`/v1/devices`).
-3. The device posture is periodically updated by the agent. If posture becomes non-compliant, policies will deny further access.
+1. The device agent generates a key pair and CSR and posts it to the authz service (`POST /v1/certs/device`) to obtain a short-lived client certificate.
+2. The agent registers the device with the inventory service (`POST /v1/devices`).
+3. The device posture is periodically updated by the agent (`POST /v1/devices/{deviceID}/posture`). If posture becomes non-compliant, policies will deny further access.
 
 ### Authorization Flow
 
 1. User authenticates with Google and presents the ID token to Envoy.
-2. Envoy calls the authz service `/v1/auth/verify` endpoint, including device ID and client IP.
+2. Envoy calls the authz service `/v1/auth/check` endpoint (Envoy ext-authz), including device ID and client IP.
 3. The authz service verifies the JWT signature against Google JWKS, fetches device posture from inventory, and evaluates the OPA policy (`policies/keep.rego`).
-4. Depending on the decision (`allow`, `deny`, or `step-up`), Envoy either forwards the request with a client mTLS certificate, returns an error, or triggers additional authentication.
+4. Depending on the decision (`allow`, `deny`, or `step-up`), Envoy either forwards the request with a client mTLS certificate, returns an error, or triggers additional authentication via the MFA service.
 
 Go services and the Flask app emit OpenTelemetry spans and metrics over OTLP/HTTP. Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and optionally `OTEL_EXPORTER_OTLP_INSECURE=true`) to route telemetry to a collector such as the OpenTelemetry Collector.
 
@@ -125,25 +212,67 @@ Go services and the Flask app emit OpenTelemetry spans and metrics over OTLP/HTT
 
 ### Go Services
 
-Run unit tests:
+Run unit tests (Go + Python):
 
 ```
-go test ./...
+make test
 ```
 
-The CI pipeline mirrors this step and caches Go modules to minimize repeated downloads.
+This runs `go test ./...` followed by `pytest`. To test a single Go package:
+
+```
+go test ./pkg/pki/
+```
+
+Build all Go services:
+
+```
+make build
+```
+
+Lint (Go + Python):
+
+```
+make lint
+```
+
+Format code:
+
+```
+make format
+```
+
+### Bazel
+
+The repository also supports Bazel builds (Bazel 9.1+):
+
+```
+make bazel-check     # gazelle + format + build
+make bazel-test      # local Bazel tests
+make bazel-test-remote  # remote build execution
+```
 
 ### OPA Policies
 
 Test policies locally:
 
 ```
-opa test ./policies
+make opa-test
 ```
+
+This runs `opa test ./policies`.
 
 ### Database
 
-The inventory service auto-migrates on startup. To inspect data during development, connect to the Postgres container:
+The inventory service auto-migrates on startup. To run migrations manually:
+
+```
+make db-migrate          # up
+make db-migrate-down     # down
+make db-migrate-status   # status
+```
+
+To inspect data during development, connect to the Postgres container:
 
 ```
 docker exec -it keep-postgres-1 psql -U postgres keep
@@ -151,26 +280,52 @@ docker exec -it keep-postgres-1 psql -U postgres keep
 
 ### Continuous Integration
 
-GitHub Actions workflows under `.github/workflows/` include:
+GitHub Actions workflows under `.github/workflows/`:
 
 - **CI/CD Pipeline (`ci.yml`)** – cached linting, unit tests with Postgres, coverage uploads, OPA policy checks, container builds, and Docker Compose smoke validation.
 - **Security Checks (`security.yml`)** – scheduled/governed runs of gosec, govulncheck, and Trivy through shared scripts.
 - **Smoke Tests (`smoke-tests.yml`)** – on-demand workflow executing the same smoke script used locally (`scripts/smoke-tests.sh`).
+- **Bazel RBE (`bazel-rbe.yml`)** – remote build execution validation.
+- **Deploy (`deploy.yml`)** – container builds and Kubernetes manifest dry-run.
 
 `actions/setup-go` and `actions/setup-python` are configured with caching to reduce build times, and reusable scripts ensure parity between local development and CI.
 
 ## Repository Structure
 
 ```
-app/                     # Flask application
-cmd/authz                # Authz service entrypoint
-cmd/inventory            # Inventory service entrypoint
-docker-compose.yml       # PoC orchestration
-envoy/                   # Envoy configs and certificates
-pkg/pki                  # Shared certificate utilities
-policies/                # OPA configuration and rego policies
-services/authz           # Authz service implementation
-services/inventory       # Inventory service implementation
+agent/                   # Attestor agent (device posture collection + cert management)
+  cmd/attestor-agent/    # Agent entrypoint
+  internal/posture/      # Platform-specific posture collectors (Linux, macOS, Windows)
+  internal/service/      # Service lifecycle and daemon management
+  scripts/               # systemd installation scripts
+app/                     # Flask application (protected backend demo)
+cmd/                     # Service entrypoints
+  authz/                 # Authorization service
+  inventory/             # Device inventory service
+  mfa/                   # MFA service
+  migrate/               # Database migration CLI
+  secrets/               # Secret management CLI
+deploy/kubernetes/       # Kubernetes manifests (deployments, services, configmaps)
+docs/                    # Additional documentation (SECRET_MANAGEMENT.md)
+envoy/                   # Envoy configs, Lua filters, and certificates
+migrations/              # Postgres schema migrations
+pkg/                     # Shared Go libraries
+  logging/               # Structured logging (zerolog)
+  metrics/               # Prometheus metrics
+  pki/                   # Certificate utilities
+  retry/                 # Retry with backoff
+  secrets/               # Secret manager backends (SSM, Vault, Azure Key Vault)
+  telemetry/             # OpenTelemetry setup
+  vouch/                 # Vouch client integration
+policies/                # OPA config and Rego policies
+scripts/                 # Build, deploy, security, and smoke-test scripts
+services/                # Service implementations
+  authz/server/          # Authz HTTP/gRPC handlers
+  inventory/server/      # Inventory HTTP handlers
+  mfa/                   # MFA service implementation
+docker-compose.yml       # PoC orchestration (basic)
+docker-compose.secure.yml # PoC orchestration (mTLS + MFA)
+Makefile                 # Build, test, lint, format, Docker, DB, Bazel targets
 ```
 
 ## Threat Model (PoC lens)
@@ -268,7 +423,7 @@ decision := "step-up" if {
 - **Allow (HTTP 200, forwarded headers)**
 
   ```bash
-  curl -k -H "Authorization: Bearer <valid-token>" \
+  curl -k -H "Authorization: Bearer ***" \
        -H "X-Device-ID: device-healthy" \
        https://localhost:8080/
   # Expect: 200 OK with X-Device-Id/X-Client-Subject headers from Envoy
@@ -277,7 +432,7 @@ decision := "step-up" if {
 - **Deny (HTTP 403)**
 
   ```bash
-  curl -k -H "Authorization: Bearer <revoked-token>" \
+  curl -k -H "Authorization: Bearer ***" \
        -H "X-Device-ID: unknown" \
        https://localhost:8080/
   # Expect: 403 Forbidden with "forbidden" body
@@ -286,7 +441,7 @@ decision := "step-up" if {
 - **Step-up required (HTTP 403 + JSON)**
 
   ```bash
-  curl -k -H "Authorization: Bearer <valid-token>" \
+  curl -k -H "Authorization: Bearer ***" \
        -H "X-Device-ID: device-risky" \
        https://localhost:8080/
   # Expect: 403 with JSON {"error":"mfa_required","mfa_url":...,"session_id":...}
